@@ -521,7 +521,6 @@ class SoundCloudClient(QMainWindow):
                         details=f"Paused: {title}",
                         state=f"by {artist}",
                         large_image="bw-exploring-bordered-white" if not cover else cover,
-                        large_text="SoundCloud",
                         small_image="bw-icon-bordered-white"
                     )
                     self.last_state = "paused"
@@ -538,7 +537,6 @@ class SoundCloudClient(QMainWindow):
                         details=title,
                         state=f"by {artist}",
                         large_image="bw-exploring-bordered-white" if not cover else cover,
-                        large_text="SoundCloud",
                         small_image="bw-icon-bordered-white",
                         start=start_time,
                         end=end_time
