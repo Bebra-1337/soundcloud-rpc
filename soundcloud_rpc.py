@@ -1,9 +1,8 @@
 import sys
 import json
 import time
-import os
 from pathlib import Path
-from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo, QObject
+from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu
 from PySide6.QtGui import QIcon, QAction
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
@@ -131,12 +130,11 @@ class AdBlockInterceptor(QWebEngineUrlRequestInterceptor):
 class SoundCloudWebPage(QWebEnginePage):
     def __init__(self, profile, parent=None):
         super().__init__(profile, parent)
-        self.client = parent
 
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
         if message.startswith("SOUNDCLOUD_RPC_UPDATE:"):
             payload = message[len("SOUNDCLOUD_RPC_UPDATE:"):]
-            self.client.handle_js_result(payload)
+            self.parent().handle_js_result(payload)
         elif message.startswith("SOUNDCLOUD_RPC_ERROR:"):
             print("JS Observer Error:", message)
         else:
@@ -352,8 +350,11 @@ class SoundCloudClient(QMainWindow):
                 return;
             }
             
+            // Debounce: collapse rapid DOM mutations into one update per 300ms
+            var debounceTimer = null;
             var observer = new MutationObserver(function(mutations) {
-                sendUpdate();
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(sendUpdate, 300);
             });
             
             observer.observe(target, {
@@ -445,6 +446,13 @@ class SoundCloudClient(QMainWindow):
         )
 
     def connect_discord(self):
+        # Close existing connection before reconnecting to avoid socket leaks
+        if self.RPC is not None:
+            try:
+                self.RPC.close()
+            except Exception:
+                pass
+            self.RPC = None
         try:
             self.RPC = Presence(self.client_id)
             self.RPC.connect()
@@ -501,6 +509,7 @@ class SoundCloudClient(QMainWindow):
                     )
                     self.last_state = "idle"
                     self.last_track = None
+                    self.last_cover = None
                     self.last_start_time = None
                 except Exception as e:
                     print("Error updating RPC (idle):", e)
@@ -529,7 +538,7 @@ class SoundCloudClient(QMainWindow):
         start_time = now - current_sec
         end_time = start_time + total_sec if total_sec else None
         
-        time_diff = abs(self.last_start_time - start_time) if self.last_start_time is not None else 9999
+        time_diff = abs(self.last_start_time - start_time) if self.last_start_time is not None else float('inf')
         
         if not self.rpc_connected or self.RPC is None:
             return
