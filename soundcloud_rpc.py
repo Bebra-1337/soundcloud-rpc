@@ -256,6 +256,7 @@ class SoundCloudClient(QMainWindow):
         self.last_track = None
         self.last_state = None
         self.last_start_time = None
+        self.last_cover = None
 
         self.connect_discord()
 
@@ -554,19 +555,21 @@ class SoundCloudClient(QMainWindow):
                     self.rpc_connected = False
         else:
             # Playing
-            if self.last_state != "playing" or self.last_track != title or time_diff > 2:
+            effective_cover = cover if cover else "bw-exploring-bordered-white"
+            if self.last_state != "playing" or self.last_track != title or self.last_cover != effective_cover or time_diff > 2:
                 try:
                     self.RPC.update(
                         activity_type=ActivityType.LISTENING,
                         details=title,
                         state=f"by {artist}",
-                        large_image="bw-exploring-bordered-white" if not cover else cover,
+                        large_image=effective_cover,
                         small_image="bw-icon-bordered-white",
                         start=start_time,
                         end=end_time
                     )
                     self.last_state = "playing"
                     self.last_track = title
+                    self.last_cover = effective_cover
                     self.last_start_time = start_time
                 except Exception as e:
                     print("Error updating RPC (playing):", e)
