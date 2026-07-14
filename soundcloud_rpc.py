@@ -2,6 +2,7 @@ import sys
 import json
 import time
 import os
+from pathlib import Path
 from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo, QObject
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu
 from PySide6.QtGui import QIcon, QAction
@@ -102,8 +103,8 @@ class AdBlockInterceptor(QWebEngineUrlRequestInterceptor):
         url = info.requestUrl().toString().lower()
 
         # Inject standard Chrome Client Hints headers to bypass Cloudflare/DataDome
-        info.setHttpHeader(b"User-Agent", b"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-        info.setHttpHeader(b"Sec-Ch-Ua", b'"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"')
+        info.setHttpHeader(b"User-Agent", b"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
+        info.setHttpHeader(b"Sec-Ch-Ua", b'"Chromium";v="136", "Not(A:Brand";v="24", "Google Chrome";v="136"')
         info.setHttpHeader(b"Sec-Ch-Ua-Mobile", b"?0")
         info.setHttpHeader(b"Sec-Ch-Ua-Platform", b'"Linux"')
 
@@ -153,12 +154,12 @@ class SoundCloudClient(QMainWindow):
         self.playback_status = "Stopped"
 
         # Create persistent storage folder
-        storage_path = "/home/bebra/.config/soundcloud_rpc/storage"
-        os.makedirs(storage_path, exist_ok=True)
+        storage_path = Path.home() / ".config" / "soundcloud_rpc" / "storage"
+        storage_path.mkdir(parents=True, exist_ok=True)
 
         # Set persistent storage and cookies path so login persists
         self.profile = QWebEngineProfile("soundcloud_profile", self)
-        self.profile.setPersistentStoragePath(storage_path)
+        self.profile.setPersistentStoragePath(str(storage_path))
         self.profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
 
         # Dynamically clean User-Agent by removing "QtWebEngine/X.Y.Z" to pass Cloudflare/DataDome bot checks
@@ -311,14 +312,30 @@ class SoundCloudClient(QMainWindow):
                     if (end_el) endduration = end_el.innerText;
                     
                     var cover = "";
-                    var cover_span = document.querySelector(".playControls__soundBadge .image__lightOutline span");
-                    if (cover_span) {
-                        var style = cover_span.getAttribute("style") || "";
-                        var matches = style.match(/url\(["']?(.*?)["']?\)/);
-                        if (matches && matches[1]) {
-                            cover = matches[1].replace("120x120", "500x500");
+                    var cover_selectors = [
+                        // Track page: main artwork (highest quality source on page)
+                        ".l-listen-main .sc-artwork span[style]",
+                        ".listenContent__artwork .sc-artwork span[style]",
+                        ".fullHero__artwork .sc-artwork span[style]",
+                        ".trackHeadline__artwork .sc-artwork span[style]",
+                        // Stream/feed playing card
+                        ".playableTile__artwork .sc-artwork span[style]",
+                        // Bottom player badge (last resort - smallest source)
+                        ".playbackSoundBadge .sc-artwork span[style]",
+                        ".playControls__soundBadge .image__lightOutline span[style]"
+                    ];
+                    for (var si = 0; si < cover_selectors.length; si++) {
+                        var cover_el = document.querySelector(cover_selectors[si]);
+                        if (!cover_el) continue;
+                        var cover_style = cover_el.getAttribute("style") || "";
+                        var cover_matches = cover_style.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/);
+                        if (cover_matches && cover_matches[1] && cover_matches[1].includes("sndcdn.com")) {
+                            // Upgrade to t500x500 — max quality SoundCloud CDN supports
+                            cover = cover_matches[1].replace(/t\d+x\d+/, "t500x500");
+                            break;
                         }
                     }
+
                     
                     console.log("SOUNDCLOUD_RPC_UPDATE:" + JSON.stringify({
                         title: final_title,
@@ -476,7 +493,7 @@ class SoundCloudClient(QMainWindow):
             self.is_playing = False
             self.playback_status = "Stopped"
             # Idle state
-            if self.last_state != "idle":
+            if self.last_state != "idle" and self.rpc_connected and self.RPC is not None:
                 try:
                     self.RPC.update(
                         activity_type=ActivityType.LISTENING,
@@ -490,15 +507,18 @@ class SoundCloudClient(QMainWindow):
                     self.last_track = None
                     self.last_start_time = None
                 except Exception as e:
-                    print("Error updating RPC:", e)
+                    print("Error updating RPC (idle):", e)
+                    self.rpc_connected = False
             return
 
         title = result.get("title", "Unknown Title")
         artist = result.get("artist", "Unknown Artist")
         playing = result.get("playing", False)
-        cover = result.get("cover", "bw-exploring-bordered-white")
+        cover = result.get("cover", "")
         current_duration = result.get("current_duration", "0:00")
         end_duration = result.get("end_duration", "0:00")
+
+        print(f"[Cover URL] {cover or '(empty)'}")
 
         self.is_playing = playing
         self.playback_status = "Playing" if playing else "Paused"
@@ -512,6 +532,9 @@ class SoundCloudClient(QMainWindow):
         
         time_diff = abs(self.last_start_time - start_time) if self.last_start_time is not None else 9999
         
+        if not self.rpc_connected or self.RPC is None:
+            return
+
         if not playing:
             # Paused
             if self.last_state != "paused" or self.last_track != title:
@@ -527,7 +550,8 @@ class SoundCloudClient(QMainWindow):
                     self.last_track = title
                     self.last_start_time = None
                 except Exception as e:
-                    print("Error updating RPC:", e)
+                    print("Error updating RPC (paused):", e)
+                    self.rpc_connected = False
         else:
             # Playing
             if self.last_state != "playing" or self.last_track != title or time_diff > 2:
@@ -545,7 +569,8 @@ class SoundCloudClient(QMainWindow):
                     self.last_track = title
                     self.last_start_time = start_time
                 except Exception as e:
-                    print("Error updating RPC:", e)
+                    print("Error updating RPC (playing):", e)
+                    self.rpc_connected = False
 
     def closeEvent(self, event):
         # Hide instead of close if really_quit is not set
@@ -556,7 +581,7 @@ class SoundCloudClient(QMainWindow):
             if self.RPC:
                 try:
                     self.RPC.close()
-                except:
+                except Exception:
                     pass
             event.accept()
 
