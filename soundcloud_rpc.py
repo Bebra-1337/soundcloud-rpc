@@ -313,16 +313,12 @@ class SoundCloudClient(QMainWindow):
                     if (end_el) endduration = end_el.innerText;
                     
                     var cover = "";
+                    // Use only the bottom player badge — it always shows the current track.
+                    // Other page elements (tiles, artwork blocks) can match wrong/stale elements.
                     var cover_selectors = [
-                        // Track page: main artwork (highest quality source on page)
-                        ".l-listen-main .sc-artwork span[style]",
-                        ".listenContent__artwork .sc-artwork span[style]",
-                        ".fullHero__artwork .sc-artwork span[style]",
-                        ".trackHeadline__artwork .sc-artwork span[style]",
-                        // Stream/feed playing card
-                        ".playableTile__artwork .sc-artwork span[style]",
-                        // Bottom player badge (last resort - smallest source)
                         ".playbackSoundBadge .sc-artwork span[style]",
+                        ".playbackSoundBadge .image__lightOutline span[style]",
+                        ".playControls__soundBadge .sc-artwork span[style]",
                         ".playControls__soundBadge .image__lightOutline span[style]"
                     ];
                     for (var si = 0; si < cover_selectors.length; si++) {
@@ -331,7 +327,6 @@ class SoundCloudClient(QMainWindow):
                         var cover_style = cover_el.getAttribute("style") || "";
                         var cover_matches = cover_style.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/);
                         if (cover_matches && cover_matches[1] && cover_matches[1].includes("sndcdn.com")) {
-                            // Upgrade to t500x500 — max quality SoundCloud CDN supports
                             cover = cover_matches[1].replace(/t\d+x\d+/, "t500x500");
                             break;
                         }
@@ -519,7 +514,10 @@ class SoundCloudClient(QMainWindow):
         current_duration = result.get("current_duration", "0:00")
         end_duration = result.get("end_duration", "0:00")
 
-        print(f"[Cover URL] {cover or '(empty)'}")
+        # Log only when something meaningful changes
+        if title != self.last_track or cover != self.last_cover:
+            print(f"[Track] {title} | Cover: {cover or '(empty)'}")
+            print(f"  Selector found: {'yes' if cover else 'NO — will use default SC logo'}")
 
         self.is_playing = playing
         self.playback_status = "Playing" if playing else "Paused"
