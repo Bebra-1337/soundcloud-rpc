@@ -536,18 +536,18 @@ class SoundCloudClient(QMainWindow):
             return
 
         if not playing:
-            # Paused
-            if self.last_state != "paused" or self.last_track != title:
+            # Paused — show only status, no track info
+            if self.last_state != "paused":
                 try:
                     self.RPC.update(
                         activity_type=ActivityType.LISTENING,
-                        details=f"Paused: {title}",
-                        state=f"by {artist}",
-                        large_image="bw-exploring-bordered-white" if not cover else cover,
+                        details="Paused",
+                        large_image="bw-exploring-bordered-white",
+                        large_text="SoundCloud Desktop",
                         small_image="bw-icon-bordered-white"
                     )
                     self.last_state = "paused"
-                    self.last_track = title
+                    self.last_track = None
                     self.last_start_time = None
                 except Exception as e:
                     print("Error updating RPC (paused):", e)
