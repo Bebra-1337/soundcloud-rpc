@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=SoundCloud Desktop
+GenericName=Music Player
+Comment=SoundCloud Desktop Player with Discord RPC and MPRIS Integration
+Exec=soundcloud-rpc %U
+Icon=soundcloud-rpc
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;Music;
+StartupWMClass=soundcloud-rpc
+Keywords=SoundCloud;Music;Player;RPC;Discord;MPRIS;

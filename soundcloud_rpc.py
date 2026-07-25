@@ -702,7 +702,32 @@ class SoundCloudClient(QMainWindow):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="SoundCloud Desktop Player with Discord RPC & MPRIS")
+    parser.add_argument("--minimized", "--tray", "-m", "-t", action="store_true", help="Start application minimized to system tray")
+    args = parser.parse_args()
+
     app = QApplication(sys.argv)
+    app.setApplicationName("soundcloud-rpc")
+    app.setApplicationDisplayName("SoundCloud Desktop")
+    app.setOrganizationName("SoundCloud")
+    app.setDesktopFileName("soundcloud-rpc")
+
+    # Set application icon
+    icon_path = Path(__file__).parent / "soundcloud.png"
+    if not icon_path.exists():
+        icon_path = Path(__file__).parent / "soundcloud.jpg"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+
     client = SoundCloudClient()
-    client.show()
+    if icon_path.exists():
+        client.setWindowIcon(QIcon(str(icon_path)))
+
+    if not args.minimized:
+        client.show()
+    else:
+        print("Starting SoundCloud Desktop minimized to system tray...")
+
     sys.exit(app.exec())
