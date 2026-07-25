@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu
-from PySide6.QtGui import QIcon, QAction, QDesktopServices
+from PySide6.QtGui import QIcon, QAction, QDesktopServices, QShortcut, QKeySequence, QGuiApplication
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection
@@ -432,6 +432,48 @@ class SoundCloudClient(QMainWindow):
         self.timer.timeout.connect(self.poll_state)
         self.timer.start(10000)
 
+        # Setup Ctrl+F shortcut to focus search bar
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.activated.connect(self.focus_search_bar)
+
+    def focus_search_bar(self):
+        js_focus_search = """
+        (function() {
+            var searchInput = document.querySelector('.headerSearch__input') || 
+                              document.querySelector('input[type="search"]') || 
+                              document.querySelector('.header__search input');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        })();
+        """
+        self.view.page().runJavaScript(js_focus_search)
+
+    def copy_track_link(self):
+        js_get_link = """
+        (function() {
+            var el = document.querySelector(".playbackSoundBadge__title");
+            if (el && el.href) {
+                return el.href;
+            }
+            return window.location.href;
+        })();
+        """
+        def on_link_retrieved(url):
+            if url:
+                QGuiApplication.clipboard().setText(url)
+                print(f"[Clipboard] Copied track link: {url}")
+                if self.tray_icon:
+                    self.tray_icon.showMessage(
+                        "SoundCloud Desktop",
+                        f"Link copied to clipboard: {url}",
+                        QSystemTrayIcon.MessageIcon.Information,
+                        2000
+                    )
+
+        self.view.page().runJavaScript(js_get_link, 0, on_link_retrieved)
+
     def create_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
         icon = QIcon.fromTheme("soundcloud-desktop", QIcon.fromTheme("audio-player", QIcon.fromTheme("audio-x-generic")))
@@ -444,6 +486,11 @@ class SoundCloudClient(QMainWindow):
         play_action = QAction("Play / Pause", self)
         play_action.triggered.connect(self.trigger_play_pause)
         self.tray_menu.addAction(play_action)
+
+        # Copy Track Link
+        copy_link_action = QAction("Copy Track Link", self)
+        copy_link_action.triggered.connect(self.copy_track_link)
+        self.tray_menu.addAction(copy_link_action)
 
         # Show/Hide window
         toggle_window_action = QAction("Show / Hide Window", self)
