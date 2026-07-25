@@ -2,9 +2,10 @@ import sys
 import json
 import time
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtGui import QIcon, QAction, QDesktopServices
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection
@@ -126,10 +127,67 @@ class AdBlockInterceptor(QWebEngineUrlRequestInterceptor):
             info.block(True)
 
 
-# Custom Web Page to intercept JavaScript console logs (used for MutationObserver communication)
+def resolve_target_url(url: QUrl) -> QUrl:
+    url_str = url.toString()
+    host = url.host().lower()
+    if host in ("gate.sc", "exit.sc", "www.gate.sc", "www.exit.sc") or "soundcloud.com/exit" in url_str:
+        try:
+            parsed = urlparse(url_str)
+            qs = parse_qs(parsed.query)
+            if "url" in qs and qs["url"]:
+                return QUrl(qs["url"][0])
+        except Exception:
+            pass
+    return url
+
+
+def is_internal_soundcloud_host(host: str) -> bool:
+    if not host:
+        return True
+    host = host.lower()
+    if host in ("gate.sc", "exit.sc", "www.gate.sc", "www.exit.sc"):
+        return False
+    if host == "soundcloud.com" or host.endswith(".soundcloud.com"):
+        return True
+    return False
+
+
+# Temporary WebPage class to handle target="_blank" links or new window requests
+class SoundCloudExternalPage(QWebEnginePage):
+    def __init__(self, profile, parent=None):
+        super().__init__(profile, parent)
+        self.handled = False
+
+    def acceptNavigationRequest(self, url, navigation_type, is_main_frame):
+        url_str = url.toString()
+        if url.isValid() and url_str not in ("about:blank", ""):
+            if not self.handled:
+                self.handled = True
+                target_url = resolve_target_url(url)
+                print(f"[External Link] Opening in default browser: {target_url.toString()}")
+                QDesktopServices.openUrl(target_url)
+                self.deleteLater()
+            return False
+        return super().acceptNavigationRequest(url, navigation_type, is_main_frame)
+
+
+# Custom Web Page to intercept JavaScript console logs and handle external link navigation
 class SoundCloudWebPage(QWebEnginePage):
     def __init__(self, profile, parent=None):
         super().__init__(profile, parent)
+
+    def createWindow(self, type):
+        return SoundCloudExternalPage(self.profile(), self.parent())
+
+    def acceptNavigationRequest(self, url, navigation_type, is_main_frame):
+        if navigation_type == QWebEnginePage.NavigationType.NavigationTypeLinkClicked:
+            target_url = resolve_target_url(url)
+            host = target_url.host().lower()
+            if not is_internal_soundcloud_host(host):
+                print(f"[External Link Clicked] Opening in default browser: {target_url.toString()}")
+                QDesktopServices.openUrl(target_url)
+                return False
+        return super().acceptNavigationRequest(url, navigation_type, is_main_frame)
 
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
         if message.startswith("SOUNDCLOUD_RPC_UPDATE:"):
