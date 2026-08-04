@@ -52,8 +52,21 @@ jobs:
         if: steps.update.outputs.changed == 'false'
         run: echo "flake.lock is already up-to-date, nothing to do."
 
-      - name: Commit and push flake.lock
+      - name: Build package with updated flake.lock
         if: steps.update.outputs.changed == 'true'
+        id: build
+        run: |
+          echo "Building nix package to verify the updated flake.lock..."
+          # Build all supported systems sequentially.
+          # If any build fails, this step exits non-zero and the commit step is skipped.
+          nix build .#packages.x86_64-linux.default \
+            --accept-flake-config \
+            --no-link \
+            --print-build-logs
+          echo "Build succeeded."
+
+      - name: Commit and push flake.lock
+        if: steps.update.outputs.changed == 'true' && steps.build.conclusion == 'success'
         run: |
           CUSTOM="${{ github.event.inputs.commit_message }}"
           OLD="${{ steps.update.outputs.old_rev }}"
@@ -72,3 +85,10 @@ jobs:
           git add flake.lock
           git commit -m "$MSG"
           git push
+
+      - name: Fail if build broke
+        if: steps.update.outputs.changed == 'true' && steps.build.conclusion != 'success'
+        run: |
+          echo "::error::Build failed with the updated flake.lock — flake.lock was NOT committed."
+          echo "::error::nixpkgs rev: ${{ steps.update.outputs.new_rev }}"
+          exit 1
