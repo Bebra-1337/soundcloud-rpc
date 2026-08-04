@@ -1,0 +1,74 @@
+name: Update flake.lock
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      commit_message:
+        description: "Custom commit message (optional)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  update-flake-lock:
+    name: nix flake update
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Set up Nix cache (Determinate Systems)
+        uses: DeterminateSystems/flakehub-cache-action@v1
+
+      - name: Update flake.lock
+        id: update
+        run: |
+          OLD_REV=$(jq -r '.nodes.nixpkgs.locked.rev' flake.lock)
+          echo "old_rev=$OLD_REV" >> "$GITHUB_OUTPUT"
+
+          nix flake update --accept-flake-config
+
+          NEW_REV=$(jq -r '.nodes.nixpkgs.locked.rev' flake.lock)
+          echo "new_rev=$NEW_REV" >> "$GITHUB_OUTPUT"
+
+          if git diff --quiet flake.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if nothing changed
+        if: steps.update.outputs.changed == 'false'
+        run: echo "flake.lock is already up-to-date, nothing to do."
+
+      - name: Commit and push flake.lock
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          CUSTOM="${{ github.event.inputs.commit_message }}"
+          OLD="${{ steps.update.outputs.old_rev }}"
+          NEW="${{ steps.update.outputs.new_rev }}"
+          SHORT_OLD="${OLD:0:7}"
+          SHORT_NEW="${NEW:0:7}"
+
+          if [ -n "$CUSTOM" ]; then
+            MSG="$CUSTOM"
+          else
+            MSG="chore: update flake.lock (nixpkgs ${SHORT_OLD}→${SHORT_NEW})"
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flake.lock
+          git commit -m "$MSG"
+          git push

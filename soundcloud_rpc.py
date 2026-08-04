@@ -422,6 +422,23 @@ class SoundCloudClient(QMainWindow):
                 characterData: true
             });
             
+            // FIX (Баг #4): Detect SPA navigation by patching history API.
+            // When SoundCloud navigates without a full page reload, the observer
+            // stays attached to the old (potentially detached) .playControls element.
+            // We reset the flag here so the next poll_state re-injects the observer.
+            (function() {
+                var _pushState = history.pushState.bind(history);
+                var _replaceState = history.replaceState.bind(history);
+                function onNavigate() {
+                    // Allow re-injection on next poll
+                    window.soundcloud_rpc_observer_set = false;
+                    observer.disconnect();
+                    console.log("SOUNDCLOUD_RPC: SPA navigation detected, observer reset.");
+                }
+                history.pushState = function() { _pushState.apply(history, arguments); onNavigate(); };
+                history.replaceState = function() { _replaceState.apply(history, arguments); onNavigate(); };
+            })();
+            
             sendUpdate();
             console.log("SOUNDCLOUD_RPC: Observer successfully started!");
         })();
@@ -619,6 +636,8 @@ class SoundCloudClient(QMainWindow):
                 except Exception as e:
                     print("Error updating RPC (idle):", e)
                     self.rpc_connected = False
+                    # FIX (Баг #1+2): Reconnect immediately instead of waiting 10s for poll_state
+                    self.connect_discord()
             return
 
         title = result.get("title", "Unknown Title")
@@ -643,6 +662,9 @@ class SoundCloudClient(QMainWindow):
         start_time = now - current_sec
         end_time = start_time + total_sec if total_sec else None
         
+        # FIX (Баг #3): Use 5s threshold instead of 2s to avoid constant RPC spam.
+        # current_duration updates once per second and time.time() has ±1s integer precision,
+        # so a 2s threshold caused near-continuous spurious updates during normal playback.
         time_diff = abs(self.last_start_time - start_time) if self.last_start_time is not None else float('inf')
         
         if not self.rpc_connected or self.RPC is None:
@@ -665,10 +687,12 @@ class SoundCloudClient(QMainWindow):
                 except Exception as e:
                     print("Error updating RPC (paused):", e)
                     self.rpc_connected = False
+                    # FIX (Баг #1+2): Reconnect immediately instead of waiting 10s for poll_state
+                    self.connect_discord()
         else:
             # Playing
             effective_cover = cover if cover else "bw-exploring-bordered-white"
-            if self.last_state != "playing" or self.last_track != title or self.last_cover != effective_cover or time_diff > 2:
+            if self.last_state != "playing" or self.last_track != title or self.last_cover != effective_cover or time_diff > 5:
                 try:
                     self.RPC.update(
                         activity_type=ActivityType.LISTENING,
@@ -686,6 +710,11 @@ class SoundCloudClient(QMainWindow):
                 except Exception as e:
                     print("Error updating RPC (playing):", e)
                     self.rpc_connected = False
+                    # FIX (Баг #1+2): Reconnect immediately instead of waiting 10s for poll_state.
+                    # FIX (Баг #5): Do NOT reset last_track/last_cover/last_state here — preserving
+                    # them ensures the next successful update after reconnect will correctly re-send
+                    # the current track info and not silently skip it due to stale equality checks.
+                    self.connect_discord()
 
     def closeEvent(self, event):
         # Hide instead of close if really_quit is not set
