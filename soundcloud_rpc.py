@@ -728,14 +728,13 @@ class SoundCloudClient(QMainWindow):
                 try:
                     self.RPC.update(
                         activity_type=ActivityType.LISTENING,
-                        details=f"Paused: {title}",
-                        state=f"by {artist}",
-                        large_image=cover if cover else "bw-exploring-bordered-white",
+                        details="Paused",
+                        large_image="bw-exploring-bordered-white",
                         large_text="SoundCloud Desktop",
                         small_image="bw-icon-bordered-white"
                     )
                     self.last_state = "paused"
-                    self.last_track = title
+                    self.last_track = None
                     self.last_start_time = None
                     self.last_update_time = now_mono
                 except Exception as e:
