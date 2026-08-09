@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 import time
 from pathlib import Path
@@ -313,6 +314,9 @@ class SoundCloudClient(QMainWindow):
         self.last_state = None
         self.last_start_time = None
         self.last_cover = None
+        self.last_update_time = 0
+        self.idle_count = 0
+        self.current_payload = None
 
         self.connect_discord()
 
@@ -356,8 +360,9 @@ class SoundCloudClient(QMainWindow):
                     
                     var title_parts = currentsongtitle.innerText.split('\n');
                     var final_title = title_parts.length > 1 ? title_parts[1] : title_parts[0];
+                    final_title = final_title ? final_title.trim() : "";
                     
-                    var artist = currentartist.innerText;
+                    var artist = currentartist.innerText ? currentartist.innerText.trim() : "";
                     var playing = playbtn.classList.contains("playing");
                     
                     var currentduration = "";
@@ -369,8 +374,6 @@ class SoundCloudClient(QMainWindow):
                     if (end_el) endduration = end_el.innerText;
                     
                     var cover = "";
-                    // Use only the bottom player badge — it always shows the current track.
-                    // Other page elements (tiles, artwork blocks) can match wrong/stale elements.
                     var cover_selectors = [
                         ".playbackSoundBadge .sc-artwork span[style]",
                         ".playbackSoundBadge .image__lightOutline span[style]",
@@ -387,8 +390,13 @@ class SoundCloudClient(QMainWindow):
                             break;
                         }
                     }
+                    if (!cover) {
+                        var img_el = document.querySelector(".playbackSoundBadge img, .playControls__soundBadge img");
+                        if (img_el && img_el.src && img_el.src.includes("sndcdn.com")) {
+                            cover = img_el.src.replace(/t\d+x\d+/, "t500x500");
+                        }
+                    }
 
-                    
                     console.log("SOUNDCLOUD_RPC_UPDATE:" + JSON.stringify({
                         title: final_title,
                         artist: artist,
@@ -422,32 +430,30 @@ class SoundCloudClient(QMainWindow):
                 characterData: true
             });
             
-            // FIX (Баг #4): Detect SPA navigation by patching history API.
-            // When SoundCloud navigates without a full page reload, the observer
-            // stays attached to the old (potentially detached) .playControls element.
-            // We reset the flag here so the next poll_state re-injects the observer.
-            (function() {
+            // Handle SPA Navigation seamlessly
+            if (!window.soundcloud_rpc_history_patched) {
+                window.soundcloud_rpc_history_patched = true;
                 var _pushState = history.pushState.bind(history);
                 var _replaceState = history.replaceState.bind(history);
                 function onNavigate() {
-                    // Allow re-injection on next poll
+                    console.log("SOUNDCLOUD_RPC: SPA navigation detected, re-initializing...");
                     window.soundcloud_rpc_observer_set = false;
-                    observer.disconnect();
-                    console.log("SOUNDCLOUD_RPC: SPA navigation detected, observer reset.");
+                    setTimeout(function() { if (typeof sendUpdate === 'function') sendUpdate(); }, 500);
+                    setTimeout(function() { if (typeof sendUpdate === 'function') sendUpdate(); }, 1500);
                 }
                 history.pushState = function() { _pushState.apply(history, arguments); onNavigate(); };
                 history.replaceState = function() { _replaceState.apply(history, arguments); onNavigate(); };
-            })();
+            }
             
             sendUpdate();
             console.log("SOUNDCLOUD_RPC: Observer successfully started!");
         })();
         """
 
-        # Timer to verify observer is attached (runs infrequently, every 10 seconds)
+        # Fast polling timer (runs every 3 seconds to check connection and observer status)
         self.timer = QTimer()
         self.timer.timeout.connect(self.poll_state)
-        self.timer.start(10000)
+        self.timer.start(3000)
 
         # Setup Ctrl+F shortcut to focus search bar
         self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
@@ -567,7 +573,16 @@ class SoundCloudClient(QMainWindow):
             'var btn = document.querySelector(".playControl"); if (btn && btn.classList.contains("playing")) btn.click();'
         )
 
+    def reset_rpc_state(self):
+        self.last_track = None
+        self.last_state = None
+        self.last_start_time = None
+        self.last_cover = None
+
     def connect_discord(self):
+        if self.rpc_connected and self.RPC is not None:
+            return True
+
         # Close existing connection before reconnecting to avoid socket leaks
         if self.RPC is not None:
             try:
@@ -575,14 +590,43 @@ class SoundCloudClient(QMainWindow):
             except Exception:
                 pass
             self.RPC = None
+
+        self.reset_rpc_state()
+
+        ipc_paths = []
+        xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid() if hasattr(os, 'getuid') else 1000}")
+        if xdg_runtime:
+            ipc_paths.extend([
+                Path(xdg_runtime) / "app" / "com.discordapp.Discord",
+                Path(xdg_runtime) / "app" / "dev.vencord.Vesktop",
+            ])
+
         try:
             self.RPC = Presence(self.client_id)
             self.RPC.connect()
             self.rpc_connected = True
             print("Discord RPC successfully connected!")
+            if self.current_payload:
+                self.handle_js_result(self.current_payload, force=True)
+            return True
         except Exception as e:
             self.rpc_connected = False
+            for pipe_dir in ipc_paths:
+                for i in range(10):
+                    pipe_file = pipe_dir / f"discord-ipc-{i}"
+                    if pipe_file.exists():
+                        try:
+                            self.RPC = Presence(self.client_id, pipe=str(pipe_file))
+                            self.RPC.connect()
+                            self.rpc_connected = True
+                            print(f"Discord RPC connected via custom pipe {pipe_file}!")
+                            if self.current_payload:
+                                self.handle_js_result(self.current_payload, force=True)
+                            return True
+                        except Exception:
+                            pass
             print(f"Waiting for Discord... ({e})")
+            return False
 
     def inject_observer(self):
         self.view.page().runJavaScript(self.observer_js_code)
@@ -605,9 +649,11 @@ class SoundCloudClient(QMainWindow):
             pass
         return 0
 
-    def handle_js_result(self, result_str):
+    def handle_js_result(self, result_str, force=False):
         if not result_str:
             return
+
+        self.current_payload = result_str
 
         try:
             result = json.loads(result_str)
@@ -615,30 +661,39 @@ class SoundCloudClient(QMainWindow):
             print("Error parsing JSON:", e)
             return
 
+        now_mono = time.monotonic()
+
         if "error" in result or "debug" in result:
-            self.is_playing = False
-            self.playback_status = "Stopped"
-            # Idle state
-            if self.last_state != "idle" and self.rpc_connected and self.RPC is not None:
-                try:
-                    self.RPC.update(
-                        activity_type=ActivityType.LISTENING,
-                        details="Exploring SoundCloud",
-                        state="Browsing tracks...",
-                        large_image="bw-exploring-bordered-white",
-                        large_text="SoundCloud Desktop",
-                        small_image="bw-icon-bordered-white"
-                    )
-                    self.last_state = "idle"
-                    self.last_track = None
-                    self.last_cover = None
-                    self.last_start_time = None
-                except Exception as e:
-                    print("Error updating RPC (idle):", e)
-                    self.rpc_connected = False
-                    # FIX (Баг #1+2): Reconnect immediately instead of waiting 10s for poll_state
-                    self.connect_discord()
+            self.idle_count += 1
+            # Require 3 consecutive debug results before switching to idle
+            # to avoid transient UI flickers during SPA navigation / track changes
+            if self.idle_count >= 3:
+                self.is_playing = False
+                self.playback_status = "Stopped"
+                if (self.last_state != "idle" or force) and self.rpc_connected and self.RPC is not None:
+                    if not force and (now_mono - self.last_update_time < 2.5):
+                        return
+                    try:
+                        self.RPC.update(
+                            activity_type=ActivityType.LISTENING,
+                            details="Exploring SoundCloud",
+                            state="Browsing tracks...",
+                            large_image="bw-exploring-bordered-white",
+                            large_text="SoundCloud Desktop",
+                            small_image="bw-icon-bordered-white"
+                        )
+                        self.last_state = "idle"
+                        self.last_track = None
+                        self.last_cover = None
+                        self.last_start_time = None
+                        self.last_update_time = now_mono
+                    except Exception as e:
+                        print("Error updating RPC (idle):", e)
+                        self.rpc_connected = False
+                        self.reset_rpc_state()
             return
+
+        self.idle_count = 0
 
         title = result.get("title", "Unknown Title")
         artist = result.get("artist", "Unknown Artist")
@@ -647,10 +702,8 @@ class SoundCloudClient(QMainWindow):
         current_duration = result.get("current_duration", "0:00")
         end_duration = result.get("end_duration", "0:00")
 
-        # Log only when something meaningful changes
         if title != self.last_track or cover != self.last_cover:
             print(f"[Track] {title} | Cover: {cover or '(empty)'}")
-            print(f"  Selector found: {'yes' if cover else 'NO — will use default SC logo'}")
 
         self.is_playing = playing
         self.playback_status = "Playing" if playing else "Paused"
@@ -662,37 +715,36 @@ class SoundCloudClient(QMainWindow):
         start_time = now - current_sec
         end_time = start_time + total_sec if total_sec else None
         
-        # FIX (Баг #3): Use 5s threshold instead of 2s to avoid constant RPC spam.
-        # current_duration updates once per second and time.time() has ±1s integer precision,
-        # so a 2s threshold caused near-continuous spurious updates during normal playback.
         time_diff = abs(self.last_start_time - start_time) if self.last_start_time is not None else float('inf')
         
         if not self.rpc_connected or self.RPC is None:
             return
 
+        if not force and (now_mono - self.last_update_time < 2.5):
+            return
+
         if not playing:
-            # Paused — show only status, no track info
-            if self.last_state != "paused":
+            if self.last_state != "paused" or force:
                 try:
                     self.RPC.update(
                         activity_type=ActivityType.LISTENING,
-                        details="Paused",
-                        large_image="bw-exploring-bordered-white",
+                        details=f"Paused: {title}",
+                        state=f"by {artist}",
+                        large_image=cover if cover else "bw-exploring-bordered-white",
                         large_text="SoundCloud Desktop",
                         small_image="bw-icon-bordered-white"
                     )
                     self.last_state = "paused"
-                    self.last_track = None
+                    self.last_track = title
                     self.last_start_time = None
+                    self.last_update_time = now_mono
                 except Exception as e:
                     print("Error updating RPC (paused):", e)
                     self.rpc_connected = False
-                    # FIX (Баг #1+2): Reconnect immediately instead of waiting 10s for poll_state
-                    self.connect_discord()
+                    self.reset_rpc_state()
         else:
-            # Playing
             effective_cover = cover if cover else "bw-exploring-bordered-white"
-            if self.last_state != "playing" or self.last_track != title or self.last_cover != effective_cover or time_diff > 5:
+            if self.last_state != "playing" or self.last_track != title or self.last_cover != effective_cover or time_diff > 5 or force:
                 try:
                     self.RPC.update(
                         activity_type=ActivityType.LISTENING,
@@ -707,14 +759,11 @@ class SoundCloudClient(QMainWindow):
                     self.last_track = title
                     self.last_cover = effective_cover
                     self.last_start_time = start_time
+                    self.last_update_time = now_mono
                 except Exception as e:
                     print("Error updating RPC (playing):", e)
                     self.rpc_connected = False
-                    # FIX (Баг #1+2): Reconnect immediately instead of waiting 10s for poll_state.
-                    # FIX (Баг #5): Do NOT reset last_track/last_cover/last_state here — preserving
-                    # them ensures the next successful update after reconnect will correctly re-send
-                    # the current track info and not silently skip it due to stale equality checks.
-                    self.connect_discord()
+                    self.reset_rpc_state()
 
     def closeEvent(self, event):
         # Hide instead of close if really_quit is not set
