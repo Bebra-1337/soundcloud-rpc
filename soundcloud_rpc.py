@@ -4,6 +4,7 @@ import json
 import time
 import asyncio
 import threading
+from collections import deque
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo
@@ -37,7 +38,13 @@ class DiscordRpcWorker(threading.Thread):
     state is retained, an update throttled by the rate limit is delayed instead of lost.
     """
 
-    MIN_INTERVAL = 2.5
+    # Discord accepts about 5 activity updates per 20s, so allow short bursts instead of a fixed gap
+    # between updates; a fixed gap made every transient state during a track skip cost seconds.
+    RATE_LIMIT_COUNT = 4
+    RATE_LIMIT_WINDOW = 20.0
+    # Wait briefly after the last real change so transient UI states (new title, old cover, stale
+    # time) collapse into the final one instead of being sent one by one.
+    SETTLE_DELAY = 0.25
     RECONNECT_INTERVAL = 5.0
 
     def __init__(self, client_id):
@@ -48,9 +55,13 @@ class DiscordRpcWorker(threading.Thread):
         self._stopping = False
         self._desired = None
         self._dirty = False
+        self._changed_at = 0.0
 
     def set_activity(self, activity):
         with self._lock:
+            # Only a real change restarts the settle timer, so the 1s heartbeat can't starve sending
+            if not self._same(activity, self._desired):
+                self._changed_at = time.monotonic()
             self._desired = activity
             self._dirty = True
         self._wake.set()
@@ -116,7 +127,7 @@ class DiscordRpcWorker(threading.Thread):
         asyncio.set_event_loop(loop)
         rpc = None
         last_sent = None
-        last_send_time = 0.0
+        sent_times = deque()
         next_connect = 0.0
         try:
             while not self._stopping:
@@ -133,7 +144,7 @@ class DiscordRpcWorker(threading.Thread):
                     continue
 
                 with self._lock:
-                    dirty, desired = self._dirty, self._desired
+                    dirty, desired, changed_at = self._dirty, self._desired, self._changed_at
 
                 timeout = None
                 if dirty and self._same(desired, last_sent):
@@ -141,7 +152,11 @@ class DiscordRpcWorker(threading.Thread):
                         if self._desired is desired:
                             self._dirty = False
                 elif dirty:
-                    delay = last_send_time + self.MIN_INTERVAL - now
+                    while sent_times and now - sent_times[0] >= self.RATE_LIMIT_WINDOW:
+                        sent_times.popleft()
+                    delay = changed_at + self.SETTLE_DELAY - now
+                    if len(sent_times) >= self.RATE_LIMIT_COUNT:
+                        delay = max(delay, sent_times[0] + self.RATE_LIMIT_WINDOW - now)
                     if delay > 0:
                         timeout = delay
                     else:
@@ -151,14 +166,14 @@ class DiscordRpcWorker(threading.Thread):
                             else:
                                 rpc.update(**desired)
                             last_sent = desired
-                            last_send_time = time.monotonic()
+                            sent_times.append(time.monotonic())
                             with self._lock:
                                 if self._desired is desired:
                                     self._dirty = False
                         except DiscordError as e:
                             # Discord rejected this payload; the connection is fine, so don't reconnect or retry it
                             print("Discord rejected activity:", e)
-                            last_send_time = time.monotonic()
+                            sent_times.append(time.monotonic())
                             with self._lock:
                                 if self._desired is desired:
                                     self._dirty = False
@@ -580,13 +595,17 @@ class SoundCloudClient(QMainWindow):
             // Re-initialisation must not stack observers
             if (window.soundcloud_rpc_observer) window.soundcloud_rpc_observer.disconnect();
             
-            // Debounce: collapse rapid DOM mutations into one update per 300ms
+            // Debounce: collapse rapid DOM mutations into one update per 100ms
             var debounceTimer = null;
             var observer = new MutationObserver(function(mutations) {
                 if (debounceTimer) clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(sendUpdate, 300);
+                debounceTimer = setTimeout(sendUpdate, 100);
             });
             window.soundcloud_rpc_observer = observer;
+
+            // Heartbeat: state changes must never depend on a mutation being observed
+            if (window.soundcloud_rpc_heartbeat) clearInterval(window.soundcloud_rpc_heartbeat);
+            window.soundcloud_rpc_heartbeat = setInterval(sendUpdate, 1000);
             
             observer.observe(target, {
                 childList: true,
