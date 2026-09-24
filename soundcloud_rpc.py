@@ -4,6 +4,7 @@ import json
 import time
 import asyncio
 import threading
+import hashlib
 from collections import deque
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, Q
 from PySide6.QtGui import QIcon, QAction, QDesktopServices, QShortcut, QKeySequence, QGuiApplication
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection
+from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection, QDBusMessage, QDBusObjectPath
 from pypresence import Presence, ActivityType
 try:
     from pypresence.exceptions import DiscordError
@@ -189,6 +190,9 @@ class DiscordRpcWorker(threading.Thread):
                 self._close(rpc)
             loop.close()
 
+MPRIS_PATH = "/org/mpris/MediaPlayer2"
+MPRIS_NO_TRACK = "/org/mpris/MediaPlayer2/TrackList/NoTrack"
+
 # D-Bus MPRIS Interface Adaptors
 @ClassInfo({
     "D-Bus Interface": "org.mpris.MediaPlayer2",
@@ -200,6 +204,7 @@ class DiscordRpcWorker(threading.Thread):
         <property name="CanRaise" type="b" access="read"/>
         <property name="HasTrackList" type="b" access="read"/>
         <property name="Identity" type="s" access="read"/>
+        <property name="DesktopEntry" type="s" access="read"/>
         <property name="SupportedUriSchemes" type="as" access="read"/>
         <property name="SupportedMimeTypes" type="as" access="read"/>
     </interface>
@@ -221,6 +226,7 @@ class MprisAdaptor(QDBusAbstractAdaptor):
     CanRaise = Property(bool, fget=lambda self: True)
     HasTrackList = Property(bool, fget=lambda self: False)
     Identity = Property(str, fget=lambda self: "SoundCloud Desktop")
+    DesktopEntry = Property(str, fget=lambda self: "soundcloud-rpc")
     SupportedUriSchemes = Property(list, fget=lambda self: [])
     SupportedMimeTypes = Property(list, fget=lambda self: [])
 
@@ -234,7 +240,15 @@ class MprisAdaptor(QDBusAbstractAdaptor):
         <method name="Previous"/>
         <method name="Play"/>
         <method name="Pause"/>
+        <method name="Stop"/>
         <property name="PlaybackStatus" type="s" access="read"/>
+        <property name="Metadata" type="a{sv}" access="read"/>
+        <property name="Position" type="x" access="read"/>
+        <property name="Rate" type="d" access="read"/>
+        <property name="MinimumRate" type="d" access="read"/>
+        <property name="MaximumRate" type="d" access="read"/>
+        <property name="Volume" type="d" access="read"/>
+        <property name="CanSeek" type="b" access="read"/>
         <property name="CanPlay" type="b" access="read"/>
         <property name="CanPause" type="b" access="read"/>
         <property name="CanGoNext" type="b" access="read"/>
@@ -267,7 +281,18 @@ class MprisPlayerAdaptor(QDBusAbstractAdaptor):
     def Pause(self):
         self.parent().trigger_pause()
 
+    @Slot()
+    def Stop(self):
+        self.parent().trigger_pause()
+
     PlaybackStatus = Property(str, fget=lambda self: self.parent().playback_status)
+    Metadata = Property("QVariantMap", fget=lambda self: self.parent().mpris_metadata)
+    Position = Property("qlonglong", fget=lambda self: self.parent().mpris_position_us())
+    Rate = Property(float, fget=lambda self: 1.0)
+    MinimumRate = Property(float, fget=lambda self: 1.0)
+    MaximumRate = Property(float, fget=lambda self: 1.0)
+    Volume = Property(float, fget=lambda self: 1.0)
+    CanSeek = Property(bool, fget=lambda self: False)
     CanPlay = Property(bool, fget=lambda self: True)
     CanPause = Property(bool, fget=lambda self: True)
     CanGoNext = Property(bool, fget=lambda self: True)
@@ -386,6 +411,8 @@ class SoundCloudClient(QMainWindow):
 
         self.is_playing = False
         self.playback_status = "Stopped"
+        self.mpris_metadata = {"mpris:trackid": QDBusObjectPath(MPRIS_NO_TRACK)}
+        self.mpris_position = (0, time.monotonic())  # (seconds at receipt, monotonic receipt time)
 
         # Create persistent storage folder
         storage_path = Path.home() / ".config" / "soundcloud_rpc" / "storage"
@@ -738,6 +765,27 @@ class SoundCloudClient(QMainWindow):
         QApplication.quit()
 
     # MPRIS Trigger actions (interacting with DOM)
+    def mpris_position_us(self):
+        seconds, received = self.mpris_position
+        if self.playback_status == "Playing":
+            seconds += time.monotonic() - received
+        return int(seconds * 1_000_000)
+
+    def update_mpris(self, status, metadata, position_sec=0):
+        """Store the new player state and emit PropertiesChanged; status bars only refresh on that signal."""
+        self.mpris_position = (position_sec, time.monotonic())
+        changed = {}
+        if status != self.playback_status:
+            self.playback_status = status
+            changed["PlaybackStatus"] = status
+        if metadata != self.mpris_metadata:
+            self.mpris_metadata = metadata
+            changed["Metadata"] = metadata
+        if changed:
+            msg = QDBusMessage.createSignal(MPRIS_PATH, "org.freedesktop.DBus.Properties", "PropertiesChanged")
+            msg.setArguments(["org.mpris.MediaPlayer2.Player", changed, []])
+            QDBusConnection.sessionBus().send(msg)
+
     def trigger_play_pause(self):
         self.view.page().runJavaScript('var btn = document.querySelector(".playControl"); if (btn) btn.click();')
 
@@ -809,7 +857,7 @@ class SoundCloudClient(QMainWindow):
             # to avoid transient UI flickers during SPA navigation / track changes
             if self.idle_count >= 3:
                 self.is_playing = False
-                self.playback_status = "Stopped"
+                self.update_mpris("Stopped", {"mpris:trackid": QDBusObjectPath(MPRIS_NO_TRACK)})
                 self.last_logged_track = None
                 self.rpc.set_activity(self.IDLE_ACTIVITY)
             return
@@ -825,15 +873,29 @@ class SoundCloudClient(QMainWindow):
             self.last_logged_track = (title, cover)
             print(f"[Track] {title} | Cover: {cover or '(empty)'}")
 
+        current_sec = self.parse_time_to_seconds(result.get("current_duration"))
+        total_sec = self.parse_time_to_seconds(result.get("end_duration"))
+        track_url = result.get("url") or ""
+
         self.is_playing = playing
-        self.playback_status = "Playing" if playing else "Paused"
+        track_id = hashlib.md5((track_url or f"{artist}-{title}").encode()).hexdigest()
+        metadata = {
+            "mpris:trackid": QDBusObjectPath(f"/org/soundcloud_rpc/track/{track_id}"),
+            "xesam:title": title,
+            "xesam:artist": [artist],
+        }
+        if total_sec:
+            metadata["mpris:length"] = total_sec * 1_000_000
+        if cover:
+            metadata["mpris:artUrl"] = cover
+        if track_url:
+            metadata["xesam:url"] = track_url
+        self.update_mpris("Playing" if playing else "Paused", metadata, current_sec)
 
         if not playing:
             self.rpc.set_activity(self.PAUSED_ACTIVITY)
             return
 
-        current_sec = self.parse_time_to_seconds(result.get("current_duration"))
-        total_sec = self.parse_time_to_seconds(result.get("end_duration"))
         start_time = int(time.time()) - current_sec
 
         activity = {
@@ -847,7 +909,6 @@ class SoundCloudClient(QMainWindow):
         }
 
         # Spotify-style "Listen" button; Discord requires an http(s) URL of at most 512 chars
-        track_url = result.get("url") or ""
         if track_url.startswith("https://") and len(track_url) <= 512:
             activity["buttons"] = [{"label": "Listen on SoundCloud", "url": track_url}]
 
