@@ -8,12 +8,12 @@ import hashlib
 from collections import deque
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo
+from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo, QMetaType
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu
 from PySide6.QtGui import QIcon, QAction, QDesktopServices, QShortcut, QKeySequence, QGuiApplication
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection, QDBusMessage, QDBusObjectPath
+from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusArgument, QDBusConnection, QDBusMessage, QDBusObjectPath
 from pypresence import Presence, ActivityType
 try:
     from pypresence.exceptions import DiscordError
@@ -782,8 +782,13 @@ class SoundCloudClient(QMainWindow):
             self.mpris_metadata = metadata
             changed["Metadata"] = metadata
         if changed:
+            # The invalidated-properties argument must be `as`; a plain empty Python list is sent as `av`,
+            # which strict clients such as playerctl reject with a signature mismatch.
+            invalidated = QDBusArgument()
+            invalidated.beginArray(QMetaType(QMetaType.Type.QString.value))
+            invalidated.endArray()
             msg = QDBusMessage.createSignal(MPRIS_PATH, "org.freedesktop.DBus.Properties", "PropertiesChanged")
-            msg.setArguments(["org.mpris.MediaPlayer2.Player", changed, []])
+            msg.setArguments(["org.mpris.MediaPlayer2.Player", changed, invalidated])
             QDBusConnection.sessionBus().send(msg)
 
     def trigger_play_pause(self):
