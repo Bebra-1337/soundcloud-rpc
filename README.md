@@ -38,7 +38,7 @@ nix profile install
 
 Start a development shell with all dependencies (`PySide6`, `pypresence`):
 ```bash
-nix develop
+nix develop   # or, without flakes: nix-shell
 python3 soundcloud_rpc.py
 ```
 

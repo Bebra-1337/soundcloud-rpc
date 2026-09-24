@@ -2,6 +2,8 @@ import sys
 import os
 import json
 import time
+import asyncio
+import threading
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo
@@ -11,6 +13,166 @@ from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngin
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection
 from pypresence import Presence, ActivityType
+try:
+    from pypresence.exceptions import DiscordError
+except ImportError:  # pragma: no cover
+    class DiscordError(Exception):
+        pass
+
+
+def clean_rpc_text(text, fallback=""):
+    """Discord rejects details/state shorter than 2 or longer than 128 bytes; a rejected payload used to look like a dropped connection."""
+    text = (text or fallback).strip()
+    text = text.encode("utf-8")[:128].decode("utf-8", "ignore").strip()
+    if len(text) < 2:
+        text = text.ljust(2, "\u2800")
+    return text
+
+
+class DiscordRpcWorker(threading.Thread):
+    """Owns the Discord IPC connection on its own thread so blocking pipe I/O never freezes the GUI.
+
+    The GUI only publishes the *desired* activity via set_activity(); the worker always converges to the
+    latest one (rate limited), reconnects with backoff, and re-sends after a reconnect. Because the desired
+    state is retained, an update throttled by the rate limit is delayed instead of lost.
+    """
+
+    MIN_INTERVAL = 2.5
+    RECONNECT_INTERVAL = 5.0
+
+    def __init__(self, client_id):
+        super().__init__(daemon=True, name="discord-rpc")
+        self.client_id = client_id
+        self._lock = threading.Lock()
+        self._wake = threading.Event()
+        self._stopping = False
+        self._desired = None
+        self._dirty = False
+
+    def set_activity(self, activity):
+        with self._lock:
+            self._desired = activity
+            self._dirty = True
+        self._wake.set()
+
+    def stop(self):
+        self._stopping = True
+        self._wake.set()
+
+    @staticmethod
+    def _same(a, b):
+        if a is None or b is None:
+            return a is b
+        keys = ("details", "state", "large_image", "small_image", "large_text")
+        if any(a.get(k) != b.get(k) for k in keys):
+            return False
+        # Playing activities carry timestamps: only resend when the start moved (seek) or the end changed
+        if (a.get("start") is None) != (b.get("start") is None):
+            return False
+        if a.get("start") is not None and abs(a["start"] - b["start"]) > 5:
+            return False
+        if (a.get("end") is None) != (b.get("end") is None):
+            return False
+        if a.get("end") is not None and abs(a["end"] - b["end"]) > 5:
+            return False
+        return True
+
+    def _ipc_pipes(self):
+        xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        for sub in ("app/com.discordapp.Discord", "app/dev.vencord.Vesktop", "snap.discord"):
+            for i in range(10):
+                pipe = Path(xdg_runtime) / sub / f"discord-ipc-{i}"
+                if pipe.exists():
+                    yield pipe
+
+    def _connect(self, loop):
+        try:
+            rpc = Presence(self.client_id, loop=loop)
+            rpc.connect()
+            print("Discord RPC successfully connected!")
+            return rpc
+        except Exception as e:
+            err = e
+        for pipe in self._ipc_pipes():
+            try:
+                rpc = Presence(self.client_id, pipe=str(pipe), loop=loop)
+                rpc.connect()
+                print(f"Discord RPC connected via custom pipe {pipe}!")
+                return rpc
+            except Exception:
+                pass
+        print(f"Waiting for Discord... ({err})")
+        return None
+
+    @staticmethod
+    def _close(rpc):
+        try:
+            rpc.close()
+        except Exception:
+            pass
+
+    def run(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        rpc = None
+        last_sent = None
+        last_send_time = 0.0
+        next_connect = 0.0
+        try:
+            while not self._stopping:
+                self._wake.clear()
+                now = time.monotonic()
+
+                if rpc is None:
+                    if now >= next_connect:
+                        rpc = self._connect(loop)
+                        last_sent = None
+                        if rpc is None:
+                            next_connect = time.monotonic() + self.RECONNECT_INTERVAL
+                    self._wake.wait(1.0 if rpc is None else 0)
+                    continue
+
+                with self._lock:
+                    dirty, desired = self._dirty, self._desired
+
+                timeout = None
+                if dirty and self._same(desired, last_sent):
+                    with self._lock:
+                        if self._desired is desired:
+                            self._dirty = False
+                elif dirty:
+                    delay = last_send_time + self.MIN_INTERVAL - now
+                    if delay > 0:
+                        timeout = delay
+                    else:
+                        try:
+                            if desired is None:
+                                rpc.clear()
+                            else:
+                                rpc.update(**desired)
+                            last_sent = desired
+                            last_send_time = time.monotonic()
+                            with self._lock:
+                                if self._desired is desired:
+                                    self._dirty = False
+                        except DiscordError as e:
+                            # Discord rejected this payload; the connection is fine, so don't reconnect or retry it
+                            print("Discord rejected activity:", e)
+                            last_send_time = time.monotonic()
+                            with self._lock:
+                                if self._desired is desired:
+                                    self._dirty = False
+                        except Exception as e:
+                            print("Discord RPC connection lost:", e)
+                            self._close(rpc)
+                            rpc = None
+                            next_connect = time.monotonic() + self.RECONNECT_INTERVAL
+                            continue
+                self._wake.wait(timeout)
+        finally:
+            if rpc is not None:
+                self._close(rpc)
+            loop.close()
 
 # D-Bus MPRIS Interface Adaptors
 @ClassInfo({
@@ -306,19 +468,12 @@ class SoundCloudClient(QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        # Discord RPC
+        # Discord RPC (runs on its own thread)
         self.client_id = "1289606421368799345"  # SoundCloud assets
-        self.RPC = None
-        self.rpc_connected = False
-        self.last_track = None
-        self.last_state = None
-        self.last_start_time = None
-        self.last_cover = None
-        self.last_update_time = 0
         self.idle_count = 0
-        self.current_payload = None
-
-        self.connect_discord()
+        self.last_logged_track = None
+        self.rpc = DiscordRpcWorker(self.client_id)
+        self.rpc.start()
 
         # MPRIS D-Bus Server Setup
         self.root_mpris = MprisAdaptor(self)
@@ -412,9 +567,14 @@ class SoundCloudClient(QMainWindow):
             
             var target = document.querySelector(".playControls");
             if (!target) {
+                // Player bar not on the page: report it so Python can fall back to the idle status
                 window.soundcloud_rpc_observer_set = false;
+                sendUpdate();
                 return;
             }
+
+            // Re-initialisation must not stack observers
+            if (window.soundcloud_rpc_observer) window.soundcloud_rpc_observer.disconnect();
             
             // Debounce: collapse rapid DOM mutations into one update per 300ms
             var debounceTimer = null;
@@ -422,6 +582,7 @@ class SoundCloudClient(QMainWindow):
                 if (debounceTimer) clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(sendUpdate, 300);
             });
+            window.soundcloud_rpc_observer = observer;
             
             observer.observe(target, {
                 childList: true,
@@ -573,67 +734,10 @@ class SoundCloudClient(QMainWindow):
             'var btn = document.querySelector(".playControl"); if (btn && btn.classList.contains("playing")) btn.click();'
         )
 
-    def reset_rpc_state(self):
-        self.last_track = None
-        self.last_state = None
-        self.last_start_time = None
-        self.last_cover = None
-
-    def connect_discord(self):
-        if self.rpc_connected and self.RPC is not None:
-            return True
-
-        # Close existing connection before reconnecting to avoid socket leaks
-        if self.RPC is not None:
-            try:
-                self.RPC.close()
-            except Exception:
-                pass
-            self.RPC = None
-
-        self.reset_rpc_state()
-
-        ipc_paths = []
-        xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid() if hasattr(os, 'getuid') else 1000}")
-        if xdg_runtime:
-            ipc_paths.extend([
-                Path(xdg_runtime) / "app" / "com.discordapp.Discord",
-                Path(xdg_runtime) / "app" / "dev.vencord.Vesktop",
-            ])
-
-        try:
-            self.RPC = Presence(self.client_id)
-            self.RPC.connect()
-            self.rpc_connected = True
-            print("Discord RPC successfully connected!")
-            if self.current_payload:
-                self.handle_js_result(self.current_payload, force=True)
-            return True
-        except Exception as e:
-            self.rpc_connected = False
-            for pipe_dir in ipc_paths:
-                for i in range(10):
-                    pipe_file = pipe_dir / f"discord-ipc-{i}"
-                    if pipe_file.exists():
-                        try:
-                            self.RPC = Presence(self.client_id, pipe=str(pipe_file))
-                            self.RPC.connect()
-                            self.rpc_connected = True
-                            print(f"Discord RPC connected via custom pipe {pipe_file}!")
-                            if self.current_payload:
-                                self.handle_js_result(self.current_payload, force=True)
-                            return True
-                        except Exception:
-                            pass
-            print(f"Waiting for Discord... ({e})")
-            return False
-
     def inject_observer(self):
         self.view.page().runJavaScript(self.observer_js_code)
 
     def poll_state(self):
-        if not self.rpc_connected:
-            self.connect_discord()
         self.inject_observer()
 
     def parse_time_to_seconds(self, time_str):
@@ -649,19 +753,32 @@ class SoundCloudClient(QMainWindow):
             pass
         return 0
 
-    def handle_js_result(self, result_str, force=False):
+    IDLE_ACTIVITY = {
+        "activity_type": ActivityType.LISTENING,
+        "details": "Exploring SoundCloud",
+        "state": "Browsing tracks...",
+        "large_image": "bw-exploring-bordered-white",
+        "large_text": "SoundCloud Desktop",
+        "small_image": "bw-icon-bordered-white",
+    }
+
+    PAUSED_ACTIVITY = {
+        "activity_type": ActivityType.LISTENING,
+        "details": "Paused",
+        "large_image": "bw-exploring-bordered-white",
+        "large_text": "SoundCloud Desktop",
+        "small_image": "bw-icon-bordered-white",
+    }
+
+    def handle_js_result(self, result_str):
         if not result_str:
             return
-
-        self.current_payload = result_str
 
         try:
             result = json.loads(result_str)
         except Exception as e:
             print("Error parsing JSON:", e)
             return
-
-        now_mono = time.monotonic()
 
         if "error" in result or "debug" in result:
             self.idle_count += 1
@@ -670,99 +787,41 @@ class SoundCloudClient(QMainWindow):
             if self.idle_count >= 3:
                 self.is_playing = False
                 self.playback_status = "Stopped"
-                if (self.last_state != "idle" or force) and self.rpc_connected and self.RPC is not None:
-                    if not force and (now_mono - self.last_update_time < 2.5):
-                        return
-                    try:
-                        self.RPC.update(
-                            activity_type=ActivityType.LISTENING,
-                            details="Exploring SoundCloud",
-                            state="Browsing tracks...",
-                            large_image="bw-exploring-bordered-white",
-                            large_text="SoundCloud Desktop",
-                            small_image="bw-icon-bordered-white"
-                        )
-                        self.last_state = "idle"
-                        self.last_track = None
-                        self.last_cover = None
-                        self.last_start_time = None
-                        self.last_update_time = now_mono
-                    except Exception as e:
-                        print("Error updating RPC (idle):", e)
-                        self.rpc_connected = False
-                        self.reset_rpc_state()
+                self.last_logged_track = None
+                self.rpc.set_activity(self.IDLE_ACTIVITY)
             return
 
         self.idle_count = 0
 
-        title = result.get("title", "Unknown Title")
-        artist = result.get("artist", "Unknown Artist")
+        title = result.get("title") or "Unknown Title"
+        artist = result.get("artist") or "Unknown Artist"
         playing = result.get("playing", False)
         cover = result.get("cover", "")
-        current_duration = result.get("current_duration", "0:00")
-        end_duration = result.get("end_duration", "0:00")
 
-        if title != self.last_track or cover != self.last_cover:
+        if (title, cover) != self.last_logged_track:
+            self.last_logged_track = (title, cover)
             print(f"[Track] {title} | Cover: {cover or '(empty)'}")
 
         self.is_playing = playing
         self.playback_status = "Playing" if playing else "Paused"
 
-        current_sec = self.parse_time_to_seconds(current_duration)
-        total_sec = self.parse_time_to_seconds(end_duration)
-        
-        now = int(time.time())
-        start_time = now - current_sec
-        end_time = start_time + total_sec if total_sec else None
-        
-        time_diff = abs(self.last_start_time - start_time) if self.last_start_time is not None else float('inf')
-        
-        if not self.rpc_connected or self.RPC is None:
-            return
-
-        if not force and (now_mono - self.last_update_time < 2.5):
-            return
-
         if not playing:
-            if self.last_state != "paused" or force:
-                try:
-                    self.RPC.update(
-                        activity_type=ActivityType.LISTENING,
-                        details="Paused",
-                        large_image="bw-exploring-bordered-white",
-                        large_text="SoundCloud Desktop",
-                        small_image="bw-icon-bordered-white"
-                    )
-                    self.last_state = "paused"
-                    self.last_track = None
-                    self.last_start_time = None
-                    self.last_update_time = now_mono
-                except Exception as e:
-                    print("Error updating RPC (paused):", e)
-                    self.rpc_connected = False
-                    self.reset_rpc_state()
-        else:
-            effective_cover = cover if cover else "bw-exploring-bordered-white"
-            if self.last_state != "playing" or self.last_track != title or self.last_cover != effective_cover or time_diff > 5 or force:
-                try:
-                    self.RPC.update(
-                        activity_type=ActivityType.LISTENING,
-                        details=title,
-                        state=f"by {artist}",
-                        large_image=effective_cover,
-                        small_image="bw-icon-bordered-white",
-                        start=start_time,
-                        end=end_time
-                    )
-                    self.last_state = "playing"
-                    self.last_track = title
-                    self.last_cover = effective_cover
-                    self.last_start_time = start_time
-                    self.last_update_time = now_mono
-                except Exception as e:
-                    print("Error updating RPC (playing):", e)
-                    self.rpc_connected = False
-                    self.reset_rpc_state()
+            self.rpc.set_activity(self.PAUSED_ACTIVITY)
+            return
+
+        current_sec = self.parse_time_to_seconds(result.get("current_duration"))
+        total_sec = self.parse_time_to_seconds(result.get("end_duration"))
+        start_time = int(time.time()) - current_sec
+
+        self.rpc.set_activity({
+            "activity_type": ActivityType.LISTENING,
+            "details": clean_rpc_text(title),
+            "state": clean_rpc_text(f"by {artist}"),
+            "large_image": cover or "bw-exploring-bordered-white",
+            "small_image": "bw-icon-bordered-white",
+            "start": start_time,
+            "end": start_time + total_sec if total_sec else None,
+        })
 
     def closeEvent(self, event):
         # Hide instead of close if really_quit is not set
@@ -770,11 +829,8 @@ class SoundCloudClient(QMainWindow):
             self.hide()
             event.ignore()
         else:
-            if self.RPC:
-                try:
-                    self.RPC.close()
-                except Exception:
-                    pass
+            self.rpc.stop()
+            self.rpc.join(timeout=2)
             event.accept()
 
 
