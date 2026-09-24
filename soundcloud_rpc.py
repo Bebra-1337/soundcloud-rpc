@@ -63,7 +63,7 @@ class DiscordRpcWorker(threading.Thread):
     def _same(a, b):
         if a is None or b is None:
             return a is b
-        keys = ("details", "state", "large_image", "small_image", "large_text")
+        keys = ("details", "state", "large_image", "small_image", "large_text", "buttons")
         if any(a.get(k) != b.get(k) for k in keys):
             return False
         # Playing activities carry timestamps: only resend when the start moved (seek) or the end changed
@@ -519,6 +519,9 @@ class SoundCloudClient(QMainWindow):
                     
                     var artist = currentartist.innerText ? currentartist.innerText.trim() : "";
                     var playing = playbtn.classList.contains("playing");
+
+                    var link_el = currentsongtitle.href ? currentsongtitle : document.querySelector(".playbackSoundBadge__titleLink");
+                    var track_url = link_el && link_el.href ? link_el.href.split("?")[0] : "";
                     
                     var currentduration = "";
                     var cur_el = document.querySelectorAll(".playbackTimeline__timePassed span")[1];
@@ -558,7 +561,8 @@ class SoundCloudClient(QMainWindow):
                         playing: playing,
                         current_duration: currentduration,
                         end_duration: endduration,
-                        cover: cover
+                        cover: cover,
+                        url: track_url
                     }));
                 } catch (e) {
                     console.log("SOUNDCLOUD_RPC_ERROR:" + e.message);
@@ -813,7 +817,7 @@ class SoundCloudClient(QMainWindow):
         total_sec = self.parse_time_to_seconds(result.get("end_duration"))
         start_time = int(time.time()) - current_sec
 
-        self.rpc.set_activity({
+        activity = {
             "activity_type": ActivityType.LISTENING,
             "details": clean_rpc_text(title),
             "state": clean_rpc_text(f"by {artist}"),
@@ -821,7 +825,14 @@ class SoundCloudClient(QMainWindow):
             "small_image": "bw-icon-bordered-white",
             "start": start_time,
             "end": start_time + total_sec if total_sec else None,
-        })
+        }
+
+        # Spotify-style "Listen" button; Discord requires an http(s) URL of at most 512 chars
+        track_url = result.get("url") or ""
+        if track_url.startswith("https://") and len(track_url) <= 512:
+            activity["buttons"] = [{"label": "Listen on SoundCloud", "url": track_url}]
+
+        self.rpc.set_activity(activity)
 
     def closeEvent(self, event):
         # Hide instead of close if really_quit is not set
