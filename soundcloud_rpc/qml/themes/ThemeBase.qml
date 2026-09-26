@@ -1,6 +1,10 @@
 import QtQuick
 
-// Common contract for every idle theme: the host sets these properties, the theme only draws.
+// Common contract for every idle theme: the host sets the track properties, the theme only draws.
+//
+// Themes are designed for a wide banner window (the reference size is 1431x500, ~2.86:1). Content goes
+// into a 286x100 "stage" (1 unit `u` = 1% of its height) that is scaled to fit and centered, so other
+// window sizes stay correct, only letterboxed. Full-bleed backdrops go into `background`.
 Item {
     id: base
 
@@ -10,13 +14,22 @@ Item {
     property real position: 0
     property real duration: 1
     property bool playing: true
-    property color accent: "#aaaaaa"
-    property color accent2: "#636363"
 
     readonly property real remaining: Math.max(0, duration - position)
     readonly property real progress: duration > 0 ? Math.min(1, position / duration) : 0
+    readonly property string elapsedText: fmt(position)
     readonly property string remainingText: "-" + fmt(remaining)
-    readonly property real u: Math.min(width, height) / 100  // layout unit: 1% of the short side
+    readonly property real u: Math.max(0.1, Math.min(width / 286, height / 100))
+
+    // Monochrome palette (noctalia "Monochrome"); the cover is the only color on screen.
+    readonly property color ink: "#f2f2f2"
+    readonly property color inkDim: "#a3a3a3"
+    readonly property color inkFaint: "#6b6b6b"
+    readonly property color surface: "#111111"
+    readonly property color outline: "#3c3c3c"
+
+    default property alias content: stage.data
+    property alias background: backdrop.data
 
     // Slow looping phase 0..2π (60s). Themes must use integer multipliers so the loop is seamless.
     property real t: 0
@@ -27,13 +40,13 @@ Item {
     property real driftY: 0
     SequentialAnimation on driftX {
         loops: Animation.Infinite
-        NumberAnimation { to: 2 * base.u; duration: 45000; easing.type: Easing.InOutSine }
-        NumberAnimation { to: -2 * base.u; duration: 45000; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 1.5 * base.u; duration: 45000; easing.type: Easing.InOutSine }
+        NumberAnimation { to: -1.5 * base.u; duration: 45000; easing.type: Easing.InOutSine }
     }
     SequentialAnimation on driftY {
         loops: Animation.Infinite
-        NumberAnimation { to: 1.5 * base.u; duration: 37000; easing.type: Easing.InOutSine }
-        NumberAnimation { to: -1.5 * base.u; duration: 37000; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 1 * base.u; duration: 37000; easing.type: Easing.InOutSine }
+        NumberAnimation { to: -1 * base.u; duration: 37000; easing.type: Easing.InOutSine }
     }
 
     function fmt(s) {
@@ -43,4 +56,7 @@ Item {
     }
 
     clip: true
+
+    Item { id: backdrop; anchors.fill: parent }
+    Item { id: stage; width: 286 * base.u; height: 100 * base.u; anchors.centerIn: parent }
 }

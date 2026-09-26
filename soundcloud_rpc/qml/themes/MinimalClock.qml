@@ -3,37 +3,39 @@ import QtQuick
 ThemeBase {
     id: root
 
-    Rectangle { anchors.fill: parent; color: "black" }
+    background: [
+        Rectangle { anchors.fill: parent; color: "#050505" },
+        Grain { amount: 0.06 }
+    ]
 
-    Column {
-        anchors.centerIn: parent
-        anchors.horizontalCenterOffset: root.driftX
-        anchors.verticalCenterOffset: root.driftY
-        spacing: 2 * root.u
-        opacity: root.playing ? 1 : 0.45
-        Behavior on opacity { NumberAnimation { duration: 600 } }
+    Row {
+        x: 10 * root.u + root.driftX
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.driftY - 2 * root.u
+        opacity: root.playing ? 1 : 0.4
+        Behavior on opacity { NumberAnimation { duration: 700 } }
+        spacing: 1 * root.u
         Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: root.remainingText
-            color: "white"
-            font.pixelSize: 34 * root.u; font.weight: Font.Thin; font.family: "monospace"
-        }
-        Rectangle { width: 60 * root.u; height: 0.4 * root.u; color: root.accent; anchors.horizontalCenter: parent.horizontalCenter
-            Rectangle { width: parent.width * root.progress; height: parent.height; color: "white" } }
-        Text {
-            width: 80 * root.u; horizontalAlignment: Text.AlignHCenter
-            text: root.title; color: "#ddd"; elide: Text.ElideRight
-            font.pixelSize: 4 * root.u; font.weight: Font.Medium
+            y: 19 * root.u
+            text: "−"; color: root.inkFaint
+            font.pixelSize: 26 * root.u; font.weight: Font.Light; font.family: "monospace"
         }
         Text {
-            width: 80 * root.u; horizontalAlignment: Text.AlignHCenter
-            text: root.artist; color: "#777"; elide: Text.ElideRight
-            font.pixelSize: 3 * root.u
+            text: root.remainingText.replace("-", "")
+            color: root.ink
+            font.pixelSize: 58 * root.u; font.weight: Font.Light; font.family: "monospace"
+            font.letterSpacing: -2 * root.u
         }
     }
+    Rectangle { x: 198 * root.u; y: 10 * root.u; width: 1; height: 80 * root.u; color: "#22ffffff" }
     Cover {
-        x: 4 * root.u; y: root.height - height - 4 * root.u
-        width: 11 * root.u; height: width; radius: 0.8 * root.u; source: root.cover; shadow: false
-        opacity: 0.85
+        x: 208 * root.u; y: 10 * root.u; width: 28 * root.u; height: width; radius: 1.6 * root.u; source: root.cover
+        opacity: root.playing ? 1 : 0.5
+    }
+    TrackInfo {
+        x: 208 * root.u; y: 45 * root.u; width: 70 * root.u
+        unit: root.u; titleSize: 6; showEyebrow: false
+        title: root.title; artist: root.artist; playing: root.playing
+        progress: root.progress; elapsedText: root.elapsedText; remainingText: ""
     }
 }

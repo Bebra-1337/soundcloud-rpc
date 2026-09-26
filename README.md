@@ -62,7 +62,7 @@ python3 -m soundcloud_rpc
 
 Preview all idle themes with fake data (←/→ switch theme, Space play/pause, T long title, C no cover, A auto-cycle):
 ```bash
-python3 soundcloud_rpc/qml/preview.py
+python3 soundcloud_rpc/qml/preview.py                      # add --fixed --size 1431x500 for a fixed-size window
 ```
 
 ---

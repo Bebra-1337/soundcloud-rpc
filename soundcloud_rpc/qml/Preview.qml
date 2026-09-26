@@ -12,8 +12,11 @@ Window {
     title: "Idle themes preview"
 
     property string shotsDir: ""
-    readonly property var themes: ["BlurCover", "Aurora", "Vinyl", "Cassette", "Particles", "Equalizer", "Polaroid",
+    property url coverUrl: Qt.resolvedUrl("../soundcloud.png")
+    property string themeFilter: ""
+    readonly property var allThemes: ["BlurCover", "Aurora", "Vinyl", "Cassette", "Particles", "Equalizer", "Polaroid",
         "MinimalClock", "Typography", "Neon", "AlbumWall", "Orbit", "GlassCard", "Starfield"]
+    readonly property var themes: themeFilter ? allThemes.filter(function (n) { return themeFilter.split(",").indexOf(n) >= 0 }) : allThemes
     property int idx: 0
     property bool playing: true
     property bool longTitle: false
@@ -35,7 +38,7 @@ Window {
     }
     Binding { target: ld.item; property: "title"; value: win.longTitle ? "Very Long Track Title That Goes On And On (Extended Club Remix) [feat. Someone Else]" : "Midnight City"; when: ld.item }
     Binding { target: ld.item; property: "artist"; value: win.longTitle ? "An Artist With A Really Long Name & Another Collaborator" : "M83"; when: ld.item }
-    Binding { target: ld.item; property: "cover"; value: win.noCover ? "" : Qt.resolvedUrl("../soundcloud.png"); when: ld.item }
+    Binding { target: ld.item; property: "cover"; value: win.noCover ? "" : win.coverUrl; when: ld.item }
     Binding { target: ld.item; property: "position"; value: win.pos; when: ld.item }
     Binding { target: ld.item; property: "duration"; value: win.dur; when: ld.item }
     Binding { target: ld.item; property: "playing"; value: win.playing; when: ld.item }
@@ -69,7 +72,7 @@ Window {
 
     // Screenshot mode: cycle through all themes, save PNGs, quit.
     Timer {
-        interval: 2500; repeat: true; running: win.shotsDir !== ""
+        interval: 2200; repeat: true; running: win.shotsDir !== ""
         onTriggered: {
             ld.grabToImage(function (r) {
                 r.saveToFile(win.shotsDir + "/" + (win.idx < 9 ? "0" : "") + (win.idx + 1) + "_" + win.themes[win.idx] + ".png")

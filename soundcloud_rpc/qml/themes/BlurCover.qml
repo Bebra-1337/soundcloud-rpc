@@ -1,57 +1,57 @@
 import QtQuick
-import QtQuick.Effects
 
 ThemeBase {
     id: root
 
-    Rectangle { anchors.fill: parent; color: "#111" }
-    Image {
-        id: bg
-        anchors.fill: parent
-        source: root.cover
-        sourceSize.width: 240
-        sourceSize.height: 240
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        visible: false
-    }
-    MultiEffect {
-        anchors.fill: parent
-        source: bg
-        blurEnabled: true
-        blur: 1.0
-        blurMax: 64
-        brightness: -0.3
-        saturation: -1
-        SequentialAnimation on scale {
-            loops: Animation.Infinite
-            NumberAnimation { from: 1.25; to: 1.4; duration: 40000; easing.type: Easing.InOutSine }
-            NumberAnimation { from: 1.4; to: 1.25; duration: 40000; easing.type: Easing.InOutSine }
-        }
-    }
-    Rectangle { anchors.fill: parent; color: "#44000000" }
-
-    Column {
-        anchors.centerIn: parent
-        anchors.horizontalCenterOffset: root.driftX
-        anchors.verticalCenterOffset: root.driftY
-        spacing: 4 * root.u
-        Cover { width: 44 * root.u; height: width; radius: 1.5 * root.u; source: root.cover; anchors.horizontalCenter: parent.horizontalCenter }
-        Meta {
-            width: 70 * root.u
-            unit: root.u
-            title: root.title; artist: root.artist; remainingText: root.remainingText
-            showRemaining: false
-        }
-        Item {
-            width: 60 * root.u; height: 5 * root.u
-            anchors.horizontalCenter: parent.horizontalCenter
-            Bar { width: parent.width; value: root.progress; color: "white"; height: 0.8 * root.u }
-            Text {
-                y: 1.6 * root.u; anchors.right: parent.right
-                text: root.remainingText; color: "white"; opacity: 0.8
-                font.pixelSize: 3 * root.u; font.family: "monospace"
+    background: [
+        BlurBackdrop { anchors.fill: parent; source: root.cover; brightness: -0.4; contrast: 0.1; zoom: 1.4 },
+        // keeps the secondary text readable over bright covers
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: "#00000000" }
+                GradientStop { position: 0.35; color: "#59000000" }
+                GradientStop { position: 1.0; color: "#8c000000" }
             }
+        },
+        Vignette { strength: 0.75; reach: 0.35 },
+        Grain { }
+    ]
+
+    // faint giant countdown behind everything for depth
+    Text {
+        x: 279 * root.u - width
+        y: -8 * root.u
+        text: root.remainingText.replace("-", "")
+        color: "#12ffffff"
+        font.pixelSize: 64 * root.u
+        font.weight: Font.Bold
+        font.family: "monospace"
+    }
+
+    Cover {
+        id: art
+        x: 16 * root.u + root.driftX
+        y: 8 * root.u + root.driftY
+        width: 84 * root.u
+        height: width
+        radius: 2.6 * root.u
+        source: root.cover
+        shadowStrength: 0.8
+        transform: Rotation {
+            origin.x: art.width / 2; origin.y: art.height / 2
+            axis { x: 0; y: 1; z: 0 }
+            angle: -5 + 3 * Math.sin(root.t * 2)
         }
+    }
+    TrackInfo {
+        x: 118 * root.u
+        y: (100 * root.u - height) / 2
+        width: 153 * root.u
+        unit: root.u
+        titleSize: 10.6
+        title: root.title; artist: root.artist; playing: root.playing
+        progress: root.progress; elapsedText: root.elapsedText; remainingText: root.remainingText
     }
 }
