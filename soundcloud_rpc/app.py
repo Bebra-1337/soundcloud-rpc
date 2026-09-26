@@ -12,10 +12,12 @@ from PySide6.QtCore import Qt, QUrl, QTimer, Slot, Property, ClassInfo, QMetaTyp
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu, QToolButton
 from PySide6.QtGui import (
     QIcon, QAction, QActionGroup, QDesktopServices, QShortcut, QKeySequence, QGuiApplication,
-    QPixmap, QPainter, QPen, QColor, QPolygonF,
+    QPixmap, QPainter, QPen, QColor, QPolygonF, QSurfaceFormat,
 )
 from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
+from PySide6.QtWebEngineCore import (
+    QWebEngineProfile, QWebEnginePage, QWebEngineSettings, QWebEngineUrlRequestInterceptor, QWebEngineScript,
+)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusArgument, QDBusConnection, QDBusMessage, QDBusObjectPath
 from pypresence import Presence, ActivityType
@@ -43,6 +45,7 @@ IDLE_THEMES = [
     ("Cassette", "Cassette"),
     ("Particles", "Particles"),
     ("Equalizer", "Equalizer"),
+    ("Stereo", "Stereo Mirror"),
     ("Polaroid", "Polaroid"),
     ("MinimalClock", "Minimal Clock"),
     ("Typography", "Typography"),
@@ -52,6 +55,123 @@ IDLE_THEMES = [
     ("Starfield", "Starfield"),
 ]
 IDLE_DISMISS_EVENTS = {QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick, QEvent.Type.KeyPress}
+
+
+# Runs in the page's own world (SoundCloud creates its <audio> element itself, often detached). It taps the
+# element with captureStream() + AnalyserNode, which, unlike createMediaElementSource(), leaves the element's own
+# output alone, and reports four 0..1 levels plus 32-band spectra (mixed, left, right) over the console channel while started (only while the idle
+# screen is open).
+AUDIO_ANALYSER_JS = """
+(function () {
+    if (window.soundcloud_rpc_audio) return;
+    var media = null, ctx = null, analyser = null, analyserL = null, analyserR = null, splitter = null;
+    var source = null, attachedTo = null, track = null, watched = null;
+    var data = null, dataL = null, dataR = null, timer = null, silent = 0, needAttach = false;
+
+    var origPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () { media = this; return origPlay.apply(this, arguments); };
+    window.addEventListener("playing", function (e) {
+        if (e.target instanceof HTMLMediaElement) { media = e.target; needAttach = true; }
+    }, true);
+
+    // a new track (skip) fires these on the element we tap: re-attach right away instead of waiting for silence
+    function watch(el) {
+        if (watched === el) return;
+        watched = el;
+        ["loadstart", "emptied", "playing"].forEach(function (n) {
+            el.addEventListener(n, function () { needAttach = true; });
+        });
+    }
+
+    function attach() {
+        needAttach = false;
+        if (!media || !ctx || !media.captureStream) return;
+        var stream = media.captureStream();
+        var tracks = stream.getAudioTracks();
+        if (!tracks.length) { needAttach = true; return; }   // MSE: the audio track may not exist yet, retry next tick
+        if (source) { try { source.disconnect(); } catch (e) {} }
+        source = ctx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        source.connect(splitter);                            // a mono source is up-mixed to both channels
+        attachedTo = media;
+        track = tracks[0];
+        silent = 0;
+        watch(media);
+    }
+
+    var BANDS = 32, edges = [], binHz = 1;
+    function idx(hz) { return Math.max(0, Math.min(data.length - 1, Math.round(hz / binHz))); }
+    function band(arr, from, to) {
+        if (to <= from) to = from + 1;
+        var sum = 0;
+        for (var i = from; i < to; i++) sum += arr[i];
+        return sum / ((to - from) * 255);
+    }
+    function buildEdges() {
+        // 32 log-spaced bands from 40 Hz to 16 kHz, expressed as analyser bin indices
+        binHz = ctx.sampleRate / analyser.fftSize;
+        edges = [];
+        for (var i = 0; i <= BANDS; i++) edges.push(idx(40 * Math.pow(16000 / 40, i / BANDS)));
+    }
+    function spectrum(arr) {
+        var out = [];
+        for (var i = 0; i < BANDS; i++) out.push(band(arr, edges[i], edges[i + 1]).toFixed(2));
+        return out.join(",");
+    }
+    function makeAnalyser() {
+        var a = ctx.createAnalyser();
+        a.fftSize = 1024;
+        a.smoothingTimeConstant = 0.5;
+        a.minDecibels = -90;
+        a.maxDecibels = -8;
+        return a;
+    }
+
+    function tick() {
+        if (!ctx) return;
+        if (ctx.state === "suspended") ctx.resume();
+        var stale = needAttach || !source || attachedTo !== media || !track || track.readyState === "ended" || silent > 24;
+        if (stale && media && !media.paused) attach();
+        if (!source) return;
+        analyser.getByteFrequencyData(data);
+        analyserL.getByteFrequencyData(dataL);
+        analyserR.getByteFrequencyData(dataR);
+        var bass = band(data, idx(20), idx(300)), mid = band(data, idx(300), idx(2500));
+        var treble = band(data, idx(2500), idx(11000)), level = band(data, idx(20), idx(11000));
+        silent = level < 0.002 ? silent + 1 : 0;
+        console.log("SOUNDCLOUD_RPC_AUDIO:" + [bass, mid, treble, level].map(function (v) { return v.toFixed(3); }).join(",") +
+                    "|" + spectrum(data) + "|" + spectrum(dataL) + "|" + spectrum(dataR));
+    }
+
+    window.soundcloud_rpc_audio = {
+        start: function () {
+            if (ctx) return;
+            ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "playback" });
+            analyser = makeAnalyser();
+            analyserL = makeAnalyser();
+            analyserR = makeAnalyser();
+            splitter = ctx.createChannelSplitter(2);
+            splitter.connect(analyserL, 0);
+            splitter.connect(analyserR, 1);
+            data = new Uint8Array(analyser.frequencyBinCount);
+            dataL = new Uint8Array(analyser.frequencyBinCount);
+            dataR = new Uint8Array(analyser.frequencyBinCount);
+            buildEdges();
+            needAttach = true;
+            timer = setInterval(tick, 33);
+            tick();
+        },
+        stop: function () {
+            if (timer) clearInterval(timer);
+            timer = null;
+            if (source) { try { source.disconnect(); } catch (e) {} }
+            source = null; attachedTo = null; track = null;
+            if (ctx) { try { ctx.close(); } catch (e) {} }
+            ctx = null; analyser = analyserL = analyserR = splitter = null;
+        }
+    };
+})();
+"""
 
 
 def make_idle_icon(color="#e6e6e6"):
@@ -444,6 +564,8 @@ class SoundCloudWebPage(QWebEnginePage):
         if message.startswith("SOUNDCLOUD_RPC_UPDATE:"):
             payload = message[len("SOUNDCLOUD_RPC_UPDATE:"):]
             self.parent().handle_js_result(payload)
+        elif message.startswith("SOUNDCLOUD_RPC_AUDIO:"):
+            self.parent().handle_audio(message[len("SOUNDCLOUD_RPC_AUDIO:"):])
         elif message.startswith("SOUNDCLOUD_RPC_ERROR:"):
             print("JS Observer Error:", message)
         else:
@@ -572,6 +694,17 @@ class SoundCloudClient(QMainWindow):
         adblock_css_script.setRunsOnSubFrames(True)
         self.profile.scripts().insert(adblock_css_script)
 
+        # Audio analyser for the idle screen; idle until soundcloud_rpc_audio.start() is called.
+        audio_script = QWebEngineScript()
+        audio_script.setName("audio")
+        audio_script.setSourceCode(AUDIO_ANALYSER_JS)
+        audio_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        audio_script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        audio_script.setRunsOnSubFrames(False)
+        self.profile.scripts().insert(audio_script)
+        # Without this the AudioContext stays suspended when playback was started without a click (MPRIS)
+        self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False)
+
         # Register AdBlocker & Header Interceptor
         self.ad_interceptor = AdBlockInterceptor()
         self.profile.setUrlRequestInterceptor(self.ad_interceptor)
@@ -587,6 +720,11 @@ class SoundCloudClient(QMainWindow):
 
         # Idle screen (QML) is an overlay above the site; the site stays visible and keeps running underneath
         self.idle_view = QQuickWidget()
+        # Multisampling: Qt Quick edges are hard by default, so slow motion (scaling, rotation) moves them in
+        # whole-pixel steps. Only the overlay gets it, a global format could disturb QtWebEngine's contexts.
+        idle_format = QSurfaceFormat()
+        idle_format.setSamples(4)
+        self.idle_view.setFormat(idle_format)
         self.idle_view.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
         self.idle_view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.idle_view.setSource(QUrl.fromLocalFile(str(QML_DIR / "IdleScreen.qml")))
@@ -904,11 +1042,13 @@ class SoundCloudClient(QMainWindow):
         self.container.show_overlay()
         self.idle_view.setFocus()
         self.idle_root.setProperty("active", True)
+        self.view.page().runJavaScript("window.soundcloud_rpc_audio && window.soundcloud_rpc_audio.start();")
 
     def exit_idle(self):
         if self.idle_active:
             self.idle_active = False
             self.idle_root.setProperty("active", False)
+            self.view.page().runJavaScript("window.soundcloud_rpc_audio && window.soundcloud_rpc_audio.stop();")
             self.container.hide_overlay()
             self.view.setFocus()
 
@@ -916,6 +1056,26 @@ class SoundCloudClient(QMainWindow):
         if self.idle_root is not None and self.idle_active:
             for key, value in self.idle_state.items():
                 self.idle_root.setProperty(key, value)
+
+    def handle_audio(self, payload):
+        """Bass / mid / treble / overall levels (0..1, about 30 per second) from the page's analyser."""
+        if not self.idle_active or self.idle_root is None:
+            return
+        parts = payload.split("|")
+        try:
+            bass, mid, treble, level = (float(v) for v in parts[0].split(","))
+            spectra = [[float(v) for v in part.split(",")] if part else [] for part in parts[1:4]]
+        except ValueError:
+            return
+        spectra += [[]] * (3 - len(spectra))
+        # the spectra go before the levels: a theme reacts when the level changes
+        self.idle_root.setProperty("audioBands", spectra[0])
+        self.idle_root.setProperty("audioBandsL", spectra[1])
+        self.idle_root.setProperty("audioBandsR", spectra[2])
+        self.idle_root.setProperty("audioBass", bass)
+        self.idle_root.setProperty("audioMid", mid)
+        self.idle_root.setProperty("audioTreble", treble)
+        self.idle_root.setProperty("audioLevel", level)
 
     def eventFilter(self, obj, event):
         if event.type() in IDLE_DISMISS_EVENTS and self.idle_active:

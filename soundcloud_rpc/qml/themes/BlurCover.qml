@@ -30,19 +30,27 @@ ThemeBase {
         font.family: "monospace"
     }
 
-    Cover {
+    // Tilted cover: the cover is pre-rendered into a 2x texture and the texture is tilted, which keeps the
+    // rounded corners smooth. The shadow tilts with it but lives outside the texture so it is not clipped.
+    Item {
         id: art
         x: 16 * root.u
         y: 8 * root.u
         width: 84 * root.u
         height: width
-        radius: 2.6 * root.u
-        source: root.cover
-        shadowStrength: 0.8
         transform: Rotation {
             origin.x: art.width / 2; origin.y: art.height / 2
             axis { x: 0; y: 1; z: 0 }
             angle: -5
+        }
+        Shadow { anchors.fill: parent; radius: 2.6 * root.u; offsetY: 0.06 * height; strength: 0.8 }
+        Item {
+            anchors.fill: parent
+            layer.enabled: true
+            layer.smooth: true
+            layer.mipmap: true
+            layer.textureSize: Qt.size(width * 2, height * 2)
+            Cover { anchors.fill: parent; radius: 2.6 * root.u; source: root.cover; shadow: false }
         }
     }
     TrackInfo {

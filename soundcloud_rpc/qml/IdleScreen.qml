@@ -13,6 +13,13 @@ Item {
     property real position: 0      // smooth position shown by the themes
     property real duration: 1
     property bool playing: true
+    property real audioBass: 0
+    property real audioMid: 0
+    property real audioTreble: 0
+    property real audioLevel: 0
+    property var audioBands: []
+    property var audioBandsL: []
+    property var audioBandsR: []
 
     opacity: active ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: 700 } }
@@ -53,4 +60,12 @@ Item {
     Binding { target: ld.item; property: "position"; value: host.position; when: ld.item }
     Binding { target: ld.item; property: "duration"; value: host.duration; when: ld.item }
     Binding { target: ld.item; property: "playing"; value: host.playing; when: ld.item }
+    Binding { target: ld.item; property: "audioBands"; value: host.audioBands; when: ld.item }
+    Binding { target: ld.item; property: "audioBandsL"; value: host.audioBandsL; when: ld.item }
+    Binding { target: ld.item; property: "audioBandsR"; value: host.audioBandsR; when: ld.item }
+    // audioLevel is bound last: the theme feeds its reactor when it changes, after the other bands are in
+    Binding { target: ld.item; property: "audioBass"; value: host.audioBass; when: ld.item }
+    Binding { target: ld.item; property: "audioMid"; value: host.audioMid; when: ld.item }
+    Binding { target: ld.item; property: "audioTreble"; value: host.audioTreble; when: ld.item }
+    Binding { target: ld.item; property: "audioLevel"; value: host.audioLevel; when: ld.item }
 }

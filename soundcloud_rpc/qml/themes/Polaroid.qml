@@ -29,17 +29,26 @@ ThemeBase {
             NumberAnimation { to: -4; duration: 8000; easing.type: Easing.InOutSine }
         }
         Shadow { anchors.fill: parent; radius: 0.6 * root.u; offsetY: 2 * root.u; strength: 0.7 }
-        Rectangle { anchors.fill: parent; color: "#e4e2dd"; radius: 0.6 * root.u }
-        Cover { x: 4 * root.u; y: 4 * root.u; width: parent.width - 8 * root.u; height: width; source: root.cover; shadow: false }
-        Text {
-            x: 5 * root.u; y: 66 * root.u; width: parent.width - 10 * root.u
-            text: root.title || "Nothing playing"; color: "#202020"; elide: Text.ElideRight
-            font.pixelSize: 4.6 * root.u; font.italic: true; font.family: "serif"; font.weight: Font.DemiBold
-        }
-        Text {
-            x: 5 * root.u; y: 73.5 * root.u; width: parent.width - 10 * root.u
-            text: root.artist; color: "#6a6a6a"; elide: Text.ElideRight
-            font.pixelSize: 3.4 * root.u; font.italic: true; font.family: "serif"
+        // The sheet (paper, photo, caption) is pre-rendered into a 2x texture and only that texture swings, which
+        // keeps the edges smooth; rotating the live items showed ragged edges.
+        Item {
+            anchors.fill: parent
+            layer.enabled: true
+            layer.smooth: true
+            layer.mipmap: true
+            layer.textureSize: Qt.size(width * 2, height * 2)
+            Rectangle { anchors.fill: parent; color: "#e4e2dd"; radius: 0.6 * root.u }
+            Cover { x: 4 * root.u; y: 4 * root.u; width: parent.width - 8 * root.u; height: width; source: root.cover; shadow: false }
+            Text {
+                x: 5 * root.u; y: 66 * root.u; width: parent.width - 10 * root.u
+                text: root.title || "Nothing playing"; color: "#202020"; elide: Text.ElideRight
+                font.pixelSize: 4.6 * root.u; font.italic: true; font.family: "serif"; font.weight: Font.DemiBold
+            }
+            Text {
+                x: 5 * root.u; y: 73.5 * root.u; width: parent.width - 10 * root.u
+                text: root.artist; color: "#6a6a6a"; elide: Text.ElideRight
+                font.pixelSize: 3.4 * root.u; font.italic: true; font.family: "serif"
+            }
         }
         // masking tape
         Rectangle {

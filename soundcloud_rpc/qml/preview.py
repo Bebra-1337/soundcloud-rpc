@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Standalone preview of the idle-screen themes: preview.py [--shots DIR] [--cover FILE] [--size WxH] [--fixed] [--only Theme,Theme]."""
+"""Standalone preview of the idle-screen themes: preview.py [--shots DIR] [--cover FILE] [--size WxH] [--fixed] [--only Theme,Theme] [--music] [--fps]."""
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSize, QUrl
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QSize, QUrl, qInstallMessageHandler
+from PySide6.QtGui import QGuiApplication, QSurfaceFormat
 from PySide6.QtQml import QQmlApplicationEngine
 
 here = Path(__file__).resolve().parent
@@ -20,9 +20,13 @@ only = opt("--only")
 fixed = "--fixed" in sys.argv
 width, height = (int(v) for v in opt("--size", "1431x500").split("x"))
 
+qInstallMessageHandler(lambda mode, ctx, msg: print(msg, flush=True))  # QML console.log / warnings
+fmt = QSurfaceFormat()
+fmt.setSamples(4)  # same multisampling as the client's idle overlay
+QSurfaceFormat.setDefaultFormat(fmt)
 app = QGuiApplication(sys.argv)
 engine = QQmlApplicationEngine()
-props = {"shotsDir": shots, "width": width, "height": height, "themeFilter": only}
+props = {"shotsDir": shots, "width": width, "height": height, "themeFilter": only, "fakeAudio": "--music" in sys.argv, "showFps": "--fps" in sys.argv}
 if cover:
     props["coverUrl"] = QUrl.fromLocalFile(cover)
 engine.setInitialProperties(props)

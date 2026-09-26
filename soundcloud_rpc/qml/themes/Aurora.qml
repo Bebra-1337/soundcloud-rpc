@@ -31,19 +31,29 @@ ThemeBase {
     ]
 
     // symmetric composition: title left, cover center, countdown right
-    Cover {
+    // The cover is rendered once into a 2x texture and the pulse only scales that texture. Scaling the live
+    // cover (image + mask + effects) showed ragged top corners; this stays smooth.
+    Item {
         id: art
         x: (286 - 76) / 2 * root.u
         y: 12 * root.u
         width: 76 * root.u
         height: width
-        radius: 3 * root.u
-        source: root.cover
-        SequentialAnimation on scale {
-            loops: Animation.Infinite
-            running: root.playing
-            NumberAnimation { to: 1.025; duration: 2200; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 1.0; duration: 2200; easing.type: Easing.InOutSine }
+        Shadow { anchors.fill: parent; radius: 3 * root.u; offsetY: 0.06 * height; strength: 0.6 }
+        Item {
+            id: pulse
+            anchors.fill: parent
+            layer.enabled: true
+            layer.smooth: true
+            layer.mipmap: true
+            layer.textureSize: Qt.size(width * 2, height * 2)
+            Cover { anchors.fill: parent; radius: 3 * root.u; source: root.cover; shadow: false }
+            SequentialAnimation on scale {
+                loops: Animation.Infinite
+                running: root.playing
+                NumberAnimation { to: 1.025; duration: 2200; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1.0; duration: 2200; easing.type: Easing.InOutSine }
+            }
         }
     }
     Column {

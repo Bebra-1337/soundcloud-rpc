@@ -27,12 +27,18 @@ Item {
         visible: false
         onStatusChanged: if (status === Image.Ready) fade.restart()
     }
+    // The mask is rasterised once into its own texture, which the window's MSAA does not reach: give it twice the
+    // resolution, its own multisampling and smooth sampling, or the rounded corners look jagged (especially
+    // when the cover is scaled).
     Item {
         id: mask
         anchors.fill: parent
         layer.enabled: true
+        layer.smooth: true
+        layer.samples: 4
+        layer.textureSize: Qt.size(Math.ceil(width * 2), Math.ceil(height * 2))
         visible: false
-        Rectangle { anchors.fill: parent; radius: cov.radius; color: "black" }
+        Rectangle { anchors.fill: parent; radius: cov.radius; color: "black"; antialiasing: true }
     }
     Rectangle {
         anchors.fill: parent
@@ -60,6 +66,7 @@ Item {
         color: "transparent"
         border.color: "#26ffffff"
         border.width: 1
+        antialiasing: true
     }
     NumberAnimation { id: fade; target: fx; property: "opacity"; from: 0; to: 1; duration: 800; easing.type: Easing.OutCubic }
 }
