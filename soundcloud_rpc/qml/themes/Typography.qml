@@ -17,7 +17,7 @@ ThemeBase {
     ]
 
     Rectangle {
-        x: 14 * root.u + root.driftX; y: 62 * root.u
+        x: 14 * root.u; y: 62 * root.u
         width: 112 * root.u; height: 30 * root.u; radius: 3 * root.u
         color: "#ee0f0f0f"; border.color: "#33ffffff"
         Cover { x: 4 * root.u; y: 4 * root.u; width: 22 * root.u; height: width; radius: 1.6 * root.u; source: root.cover; shadow: false }

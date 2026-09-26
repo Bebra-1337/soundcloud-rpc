@@ -31,23 +31,10 @@ Item {
     default property alias content: stage.data
     property alias background: backdrop.data
 
-    // Slow looping phase 0..2π (60s). Themes must use integer multipliers so the loop is seamless.
+    // Slow looping phase 0..2π (60s) for decorative motion. Themes must use integer multipliers so the loop
+    // is seamless. Never use it to move covers or text: sub-pixel drift shows up as jitter.
     property real t: 0
     NumberAnimation on t { from: 0; to: Math.PI * 2; duration: 60000; loops: Animation.Infinite }
-
-    // Tiny drift so static elements don't burn into the screen.
-    property real driftX: 0
-    property real driftY: 0
-    SequentialAnimation on driftX {
-        loops: Animation.Infinite
-        NumberAnimation { to: 1.5 * base.u; duration: 45000; easing.type: Easing.InOutSine }
-        NumberAnimation { to: -1.5 * base.u; duration: 45000; easing.type: Easing.InOutSine }
-    }
-    SequentialAnimation on driftY {
-        loops: Animation.Infinite
-        NumberAnimation { to: 1 * base.u; duration: 37000; easing.type: Easing.InOutSine }
-        NumberAnimation { to: -1 * base.u; duration: 37000; easing.type: Easing.InOutSine }
-    }
 
     function fmt(s) {
         s = Math.max(0, Math.floor(s))
@@ -58,5 +45,10 @@ Item {
     clip: true
 
     Item { id: backdrop; anchors.fill: parent }
-    Item { id: stage; width: 286 * base.u; height: 100 * base.u; anchors.centerIn: parent }
+    // snapped to whole pixels: a half-pixel offset would make every edge in the theme render soft
+    Item {
+        id: stage
+        width: 286 * base.u; height: 100 * base.u
+        x: Math.round((base.width - width) / 2); y: Math.round((base.height - height) / 2)
+    }
 }

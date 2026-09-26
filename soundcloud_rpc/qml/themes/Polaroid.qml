@@ -19,7 +19,7 @@ ThemeBase {
 
     Item {
         id: photo
-        x: 24 * root.u + root.driftX; y: 8 * root.u + root.driftY
+        x: 24 * root.u; y: 8 * root.u
         width: 66 * root.u; height: 84 * root.u
         transformOrigin: Item.Top
         rotation: -4

@@ -33,7 +33,7 @@ ThemeBase {
     ]
 
     Item {
-        x: 30 * root.u + root.driftX; y: 22 * root.u; width: 56 * root.u; height: width
+        x: 30 * root.u; y: 22 * root.u; width: 56 * root.u; height: width
         Repeater {
             model: 2
             Rectangle {

@@ -27,7 +27,7 @@ Item {
             height: parent.height
             radius: height / 2
             color: p.color
-            Behavior on width { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
+            Behavior on width { NumberAnimation { duration: 220 } }
         }
         Rectangle {
             width: p.unit * 1.7; height: width; radius: width / 2

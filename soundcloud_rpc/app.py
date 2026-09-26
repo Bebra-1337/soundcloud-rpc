@@ -854,7 +854,7 @@ class SoundCloudClient(QMainWindow):
         self.idle_forced = False
         self.idle_entered_at = 0.0
         self.idle_last_pos = None
-        self.idle_state = {"title": "", "artist": "", "cover": "", "position": 0, "duration": 1, "playing": False}
+        self.idle_state = {"title": "", "artist": "", "cover": "", "syncPosition": 0, "duration": 1, "playing": False}
 
         self.idle_timer = QTimer(self)
         self.idle_timer.setSingleShot(True)
@@ -1149,7 +1149,7 @@ class SoundCloudClient(QMainWindow):
             "title": title,
             "artist": artist,
             "cover": cover,
-            "position": current_sec,
+            "syncPosition": current_sec,
             "duration": total_sec or 1,
             "playing": playing,
         }

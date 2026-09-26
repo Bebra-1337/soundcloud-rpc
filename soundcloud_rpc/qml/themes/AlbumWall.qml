@@ -46,7 +46,7 @@ ThemeBase {
     ]
 
     Cover {
-        x: 16 * root.u + root.driftX; y: 8 * root.u + root.driftY
+        x: 16 * root.u; y: 8 * root.u
         width: 84 * root.u; height: width; radius: 2.6 * root.u; source: root.cover; shadowStrength: 0.85
     }
     TrackInfo {

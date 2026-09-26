@@ -37,7 +37,7 @@ ThemeBase {
 
     // planet glow
     Rectangle {
-        x: root.cx - width / 2 + root.driftX; y: root.cy - height / 2
+        x: root.cx - width / 2; y: root.cy - height / 2
         width: 60 * root.u; height: width; radius: width / 2; color: "white"; opacity: 0.16
         layer.enabled: true; layer.smooth: true
         layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 64 }

@@ -32,8 +32,8 @@ ThemeBase {
 
     Cover {
         id: art
-        x: 16 * root.u + root.driftX
-        y: 8 * root.u + root.driftY
+        x: 16 * root.u
+        y: 8 * root.u
         width: 84 * root.u
         height: width
         radius: 2.6 * root.u
@@ -42,7 +42,7 @@ ThemeBase {
         transform: Rotation {
             origin.x: art.width / 2; origin.y: art.height / 2
             axis { x: 0; y: 1; z: 0 }
-            angle: -5 + 3 * Math.sin(root.t * 2)
+            angle: -5
         }
     }
     TrackInfo {

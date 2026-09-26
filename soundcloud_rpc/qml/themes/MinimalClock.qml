@@ -9,9 +9,9 @@ ThemeBase {
     ]
 
     Row {
-        x: 10 * root.u + root.driftX
+        x: 10 * root.u
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: root.driftY - 2 * root.u
+        anchors.verticalCenterOffset: -2 * root.u
         opacity: root.playing ? 1 : 0.4
         Behavior on opacity { NumberAnimation { duration: 700 } }
         spacing: 1 * root.u

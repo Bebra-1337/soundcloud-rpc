@@ -26,8 +26,8 @@ ThemeBase {
     ]
 
     Item {
-        x: 16 * root.u + root.driftX
-        y: 10 * root.u + root.driftY
+        x: 16 * root.u
+        y: 10 * root.u
         width: 80 * root.u; height: width
         Rectangle {
             anchors.centerIn: parent

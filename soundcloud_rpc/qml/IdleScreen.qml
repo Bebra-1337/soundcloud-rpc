@@ -9,7 +9,8 @@ Item {
     property string title: ""
     property string artist: ""
     property url cover: ""
-    property real position: 0
+    property real syncPosition: 0  // last position reported by the site (whole seconds, irregular phase)
+    property real position: 0      // smooth position shown by the themes
     property real duration: 1
     property bool playing: true
 
@@ -18,10 +19,25 @@ Item {
 
     Rectangle { anchors.fill: parent; color: "#111111" }
 
-    // Python refreshes position about once a second; tick locally in between so the timer is smooth.
+    // The site reports whole seconds with an irregular phase. Following every report makes the bar and the
+    // digits jump back and forth (0:23, 0:21, 0:22), so the position is extrapolated from an anchor and only
+    // re-anchored when the report disagrees with it by more than a second and a half (seek, new track).
+    property double anchorMs: 0
+    property real anchorPos: 0
+    function reanchor(p) {
+        anchorPos = p
+        anchorMs = Date.now()
+        position = Math.min(duration, p)
+    }
+    onSyncPositionChanged: {
+        if (!playing || Math.abs(syncPosition + 0.5 - position) > 1.6)
+            reanchor(syncPosition)
+    }
+    onPlayingChanged: reanchor(playing ? position : syncPosition)
+    onActiveChanged: if (active) reanchor(syncPosition)
     Timer {
-        interval: 1000; repeat: true; running: host.active && host.playing
-        onTriggered: host.position = Math.min(host.duration, host.position + 1)
+        interval: 200; repeat: true; running: host.active && host.playing
+        onTriggered: host.position = Math.min(host.duration, host.anchorPos + (Date.now() - host.anchorMs) / 1000)
     }
 
     // Unloaded while inactive, so hidden themes cost no rendering or animation time.

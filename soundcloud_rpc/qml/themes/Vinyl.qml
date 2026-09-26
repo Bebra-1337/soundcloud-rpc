@@ -26,8 +26,8 @@ ThemeBase {
 
     Item {
         id: rec
-        x: 10 * root.u + root.driftX
-        y: 4 * root.u + root.driftY
+        x: 10 * root.u
+        y: 4 * root.u
         width: 92 * root.u
         height: width
 
@@ -81,7 +81,7 @@ ThemeBase {
 
     // tonearm: pivot at the top right of the record, swings onto the groove and creeps inward
     Item {
-        x: 116 * root.u + root.driftX; y: 12 * root.u
+        x: 116 * root.u; y: 12 * root.u
         Rectangle { x: -4.5 * root.u; y: -4.5 * root.u; width: 9 * root.u; height: width; radius: width / 2; color: "#2a2a2a"; border.color: "#4a4a4a"; border.width: 2 }
         Item {
             id: arm

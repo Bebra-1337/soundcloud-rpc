@@ -30,8 +30,8 @@ ThemeBase {
 
     Item {
         id: card
-        x: 12 * root.u + Math.sin(root.t * 2) * 0.7 * root.u
-        y: 12 * root.u + Math.sin(root.t * 3) * 0.5 * root.u
+        x: 12 * root.u
+        y: 12 * root.u
         width: 262 * root.u
         height: 76 * root.u
 

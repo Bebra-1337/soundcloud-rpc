@@ -77,7 +77,7 @@ ThemeBase {
     ]
 
     Item {
-        x: 14 * root.u + root.driftX; y: 8 * root.u
+        x: 14 * root.u; y: 8 * root.u
         width: 74 * root.u; height: width
         Cover { anchors.fill: parent; radius: 1.6 * root.u; source: root.cover; shadow: false }
         Rectangle {

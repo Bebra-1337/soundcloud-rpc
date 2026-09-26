@@ -17,8 +17,8 @@ ThemeBase {
 
     Item {
         id: tape
-        x: 9 * root.u + root.driftX
-        y: 3 * root.u + root.driftY
+        x: 9 * root.u
+        y: 3 * root.u
         width: 152 * root.u
         height: 94 * root.u
 
