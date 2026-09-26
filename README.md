@@ -13,7 +13,7 @@ A desktop client for **SoundCloud** with Discord Rich Presence integration, MPRI
 - 🎛️ **Linux MPRIS D-Bus Integration**: Full media keys support & compatibility with Linux desktop status bars/widgets (Waybar, Polybar, Noctalia, KDE Plasma, GNOME).
 - 📌 **System Tray Integration**: Background playback, tray context menu with Play/Pause, Show/Hide Window, and Quit actions.
 - 📋 **Copy Track Link**: Copy the currently playing song's URL directly to your clipboard from the tray menu.
-- 🌌 **Idle Screen**: After 30 s without input while music plays, the site is replaced by a native QML "now playing" scene (cover, title, time remaining) with 14 switchable themes (default: Glass Card, all in grayscale). Any input or pause brings the site back. Configure it from the tray menu: *Idle Screen* → enable, cycle themes, pick a theme, or *Show Now*.
+- 🌌 **Idle Screen**: a round button in the bottom-right corner of the window (or *Idle Screen → Show Idle Screen* in the tray menu) covers the site with a native QML "now playing" scene (cover, title, time remaining) with 14 switchable themes (default: Glass Card, all in grayscale). A click or key press returns to the site, and playback is not interrupted. Pick the theme from the tray menu: *Idle Screen*.
 - 🔍 **Keyboard Shortcut (`Ctrl + F`)**: Instantly focus and select SoundCloud's top search bar.
 - 🔗 **External Browser Router**: Links in artist profiles (Instagram, Twitter, Spotify, etc.) and `gate.sc` redirects automatically open in your default desktop browser.
 - 🛡️ **Built-in AdBlocker**: Suppresses audio & display promotions without breaking playback.
