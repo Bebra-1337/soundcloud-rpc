@@ -1,0 +1,46 @@
+import QtQuick
+
+// Common contract for every idle theme: the host sets these properties, the theme only draws.
+Item {
+    id: base
+
+    property string title: ""
+    property string artist: ""
+    property url cover: ""
+    property real position: 0
+    property real duration: 1
+    property bool playing: true
+    property color accent: "#aaaaaa"
+    property color accent2: "#636363"
+
+    readonly property real remaining: Math.max(0, duration - position)
+    readonly property real progress: duration > 0 ? Math.min(1, position / duration) : 0
+    readonly property string remainingText: "-" + fmt(remaining)
+    readonly property real u: Math.min(width, height) / 100  // layout unit: 1% of the short side
+
+    // Slow looping phase 0..2π (60s). Themes must use integer multipliers so the loop is seamless.
+    property real t: 0
+    NumberAnimation on t { from: 0; to: Math.PI * 2; duration: 60000; loops: Animation.Infinite }
+
+    // Tiny drift so static elements don't burn into the screen.
+    property real driftX: 0
+    property real driftY: 0
+    SequentialAnimation on driftX {
+        loops: Animation.Infinite
+        NumberAnimation { to: 2 * base.u; duration: 45000; easing.type: Easing.InOutSine }
+        NumberAnimation { to: -2 * base.u; duration: 45000; easing.type: Easing.InOutSine }
+    }
+    SequentialAnimation on driftY {
+        loops: Animation.Infinite
+        NumberAnimation { to: 1.5 * base.u; duration: 37000; easing.type: Easing.InOutSine }
+        NumberAnimation { to: -1.5 * base.u; duration: 37000; easing.type: Easing.InOutSine }
+    }
+
+    function fmt(s) {
+        s = Math.max(0, Math.floor(s))
+        var m = Math.floor(s / 60), r = s % 60
+        return m + ":" + (r < 10 ? "0" : "") + r
+    }
+
+    clip: true
+}

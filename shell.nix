@@ -14,8 +14,10 @@ let
   ]);
 in
 pkgs.mkShell {
-  buildInputs = [ pythonEnv ];
+  packages = [ pythonEnv ];
+  # QtQuick modules for the idle screen (the PySide6 wheel does not ship them)
+  QML_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
   shellHook = ''
-    echo "SoundCloud RPC dev shell — run: python3 soundcloud_rpc.py"
+    echo "SoundCloud RPC dev shell — run: python3 -m soundcloud_rpc"
   '';
 }

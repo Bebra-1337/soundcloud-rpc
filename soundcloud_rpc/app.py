@@ -8,9 +8,10 @@ import hashlib
 from collections import deque
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-from PySide6.QtCore import QUrl, QTimer, Slot, Property, ClassInfo, QMetaType
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu
-from PySide6.QtGui import QIcon, QAction, QDesktopServices, QShortcut, QKeySequence, QGuiApplication
+from PySide6.QtCore import Qt, QUrl, QTimer, Slot, Property, ClassInfo, QMetaType, QEvent, QSettings
+from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu, QStackedWidget
+from PySide6.QtGui import QIcon, QAction, QActionGroup, QDesktopServices, QShortcut, QKeySequence, QGuiApplication
+from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusArgument, QDBusConnection, QDBusMessage, QDBusObjectPath
@@ -20,6 +21,41 @@ try:
 except ImportError:  # pragma: no cover
     class DiscordError(Exception):
         pass
+
+
+PACKAGE_DIR = Path(__file__).resolve().parent
+QML_DIR = PACKAGE_DIR / "qml"
+ICON_PATH = PACKAGE_DIR / "soundcloud.png"
+
+IDLE_TIMEOUT_MS = 30_000  # no input for this long while playing -> show the idle screen
+IDLE_RETRY_MS = 5_000  # re-check interval when the timeout elapsed but the idle screen is not allowed yet
+IDLE_CYCLE_MS = 90_000  # theme rotation period when "Cycle Themes" is on
+IDLE_ENTER_GRACE_S = 0.6  # ignore input right after entering idle (layout changes emit synthetic mouse moves)
+IDLE_MOVE_THRESHOLD = 4  # px the pointer must travel to count as activity
+DEFAULT_IDLE_THEME = "GlassCard"
+IDLE_THEMES = [
+    ("GlassCard", "Glass Card"),
+    ("BlurCover", "Blur Cover"),
+    ("Aurora", "Aurora"),
+    ("Vinyl", "Vinyl"),
+    ("Cassette", "Cassette"),
+    ("Particles", "Particles"),
+    ("Equalizer", "Equalizer"),
+    ("Polaroid", "Polaroid"),
+    ("MinimalClock", "Minimal Clock"),
+    ("Typography", "Typography"),
+    ("Neon", "Neon"),
+    ("AlbumWall", "Album Wall"),
+    ("Orbit", "Orbit"),
+    ("Starfield", "Starfield"),
+]
+IDLE_ACTIVITY_EVENTS = {
+    QEvent.Type.MouseButtonPress,
+    QEvent.Type.MouseButtonDblClick,
+    QEvent.Type.Wheel,
+    QEvent.Type.KeyPress,
+    QEvent.Type.TouchBegin,
+}
 
 
 def clean_rpc_text(text, fallback=""):
@@ -396,6 +432,8 @@ class SoundCloudWebPage(QWebEnginePage):
         if message.startswith("SOUNDCLOUD_RPC_UPDATE:"):
             payload = message[len("SOUNDCLOUD_RPC_UPDATE:"):]
             self.parent().handle_js_result(payload)
+        elif message == "SOUNDCLOUD_RPC_ACTIVITY":
+            self.parent().note_activity()
         elif message.startswith("SOUNDCLOUD_RPC_ERROR:"):
             print("JS Observer Error:", message)
         else:
@@ -488,6 +526,30 @@ class SoundCloudClient(QMainWindow):
         adblock_css_script.setRunsOnSubFrames(True)
         self.profile.scripts().insert(adblock_css_script)
 
+        # Report user input inside the page (throttled) so the idle screen knows when the user is active.
+        # Qt-level input events over QtWebEngine are not observable from Python without an application-wide
+        # event filter, which crashes PySide on non-wrapped QObjects.
+        activity_script = QWebEngineScript()
+        activity_script.setName("activity")
+        activity_script.setSourceCode("""
+            (function() {
+                var last = 0;
+                function ping() {
+                    var now = Date.now();
+                    if (now - last < 1000) return;
+                    last = now;
+                    console.log("SOUNDCLOUD_RPC_ACTIVITY");
+                }
+                ["mousemove", "mousedown", "wheel", "keydown", "touchstart"].forEach(function(name) {
+                    window.addEventListener(name, ping, {capture: true, passive: true});
+                });
+            })();
+        """)
+        activity_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+        activity_script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
+        activity_script.setRunsOnSubFrames(False)
+        self.profile.scripts().insert(activity_script)
+
         # Register AdBlocker & Header Interceptor
         self.ad_interceptor = AdBlockInterceptor()
         self.profile.setUrlRequestInterceptor(self.ad_interceptor)
@@ -501,14 +563,30 @@ class SoundCloudClient(QMainWindow):
         # Re-inject observer when load finishes
         self.view.loadFinished.connect(self.inject_observer)
 
+        # Idle screen (QML) lives on the second stack page above the site; the site keeps running underneath
+        self.idle_view = QQuickWidget()
+        self.idle_view.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
+        self.idle_view.setMouseTracking(True)
+        self.idle_view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.idle_view.setSource(QUrl.fromLocalFile(str(QML_DIR / "IdleScreen.qml")))
+        self.idle_root = self.idle_view.rootObject()
+        if self.idle_root is None:
+            print("Idle screen disabled, QML failed to load:", [e.toString() for e in self.idle_view.errors()])
+
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.view)
+        self.stack.addWidget(self.idle_view)
+
         # Layout
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.view)
+        layout.addWidget(self.stack)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
+
+        self.init_idle_screen()
 
         # Discord RPC (runs on its own thread)
         self.client_id = "1289606421368799345"  # SoundCloud assets
@@ -710,7 +788,9 @@ class SoundCloudClient(QMainWindow):
 
     def create_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
-        icon = QIcon.fromTheme("soundcloud-desktop", QIcon.fromTheme("audio-player", QIcon.fromTheme("audio-x-generic")))
+        icon = QIcon.fromTheme("soundcloud-rpc", QIcon(str(ICON_PATH)))
+        if icon.isNull():
+            icon = QIcon.fromTheme("audio-player", QIcon.fromTheme("audio-x-generic"))
         self.tray_icon.setIcon(icon)
 
         # Menu
@@ -732,6 +812,8 @@ class SoundCloudClient(QMainWindow):
         self.tray_menu.addAction(toggle_window_action)
 
         self.tray_menu.addSeparator()
+        self.create_idle_menu(self.tray_menu)
+        self.tray_menu.addSeparator()
 
         # Quit
         quit_action = QAction("Quit", self)
@@ -741,6 +823,152 @@ class SoundCloudClient(QMainWindow):
         self.tray_icon.setContextMenu(self.tray_menu)
         self.tray_icon.activated.connect(self.tray_activated)
         self.tray_icon.show()
+
+    # Idle screen
+    def init_idle_screen(self):
+        settings = QSettings()
+        self.idle_enabled = settings.value("idle/enabled", True, type=bool)
+        self.idle_cycle = settings.value("idle/cycle", False, type=bool)
+        theme = settings.value("idle/theme", DEFAULT_IDLE_THEME, type=str)
+        self.idle_theme = theme if theme in dict(IDLE_THEMES) else DEFAULT_IDLE_THEME
+        self.idle_active = False
+        self.idle_forced = False
+        self.idle_entered_at = 0.0
+        self.idle_last_pos = None
+        self.idle_state = {"title": "", "artist": "", "cover": "", "position": 0, "duration": 1, "playing": False}
+
+        self.idle_timer = QTimer(self)
+        self.idle_timer.setSingleShot(True)
+        self.idle_timer.timeout.connect(self.on_idle_timeout)
+        self.idle_cycle_timer = QTimer(self)
+        self.idle_cycle_timer.setInterval(IDLE_CYCLE_MS)
+        self.idle_cycle_timer.timeout.connect(self.next_idle_theme)
+
+        if self.idle_root is not None:
+            self.idle_root.setProperty("theme", self.idle_theme)
+            self.idle_view.installEventFilter(self)  # input over the idle page; the site reports its own input via JS
+            self.restart_idle_timer()
+
+    def create_idle_menu(self, menu):
+        idle_menu = menu.addMenu("Idle Screen")
+
+        self.idle_enabled_action = QAction("Enabled", self, checkable=True, checked=self.idle_enabled)
+        self.idle_enabled_action.toggled.connect(self.set_idle_enabled)
+        idle_menu.addAction(self.idle_enabled_action)
+
+        self.idle_cycle_action = QAction("Cycle Themes", self, checkable=True, checked=self.idle_cycle)
+        self.idle_cycle_action.toggled.connect(self.set_idle_cycle)
+        idle_menu.addAction(self.idle_cycle_action)
+
+        show_now = QAction("Show Now", self)
+        show_now.triggered.connect(lambda: self.enter_idle(force=True))
+        idle_menu.addAction(show_now)
+        idle_menu.addSeparator()
+
+        self.idle_theme_group = QActionGroup(self)
+        self.idle_theme_actions = {}
+        for key, label in IDLE_THEMES:
+            action = QAction(label, self, checkable=True, checked=(key == self.idle_theme))
+            action.triggered.connect(lambda _checked=False, k=key: self.set_idle_theme(k))
+            self.idle_theme_group.addAction(action)
+            idle_menu.addAction(action)
+            self.idle_theme_actions[key] = action
+
+        if self.idle_root is None:
+            idle_menu.setEnabled(False)
+
+    def set_idle_enabled(self, enabled):
+        self.idle_enabled = enabled
+        QSettings().setValue("idle/enabled", enabled)
+        if enabled:
+            self.restart_idle_timer()
+        else:
+            self.idle_timer.stop()
+            self.exit_idle()
+
+    def set_idle_cycle(self, enabled):
+        self.idle_cycle = enabled
+        QSettings().setValue("idle/cycle", enabled)
+        if self.idle_active and enabled:
+            self.idle_cycle_timer.start()
+        else:
+            self.idle_cycle_timer.stop()
+
+    def set_idle_theme(self, key):
+        self.idle_theme = key
+        QSettings().setValue("idle/theme", key)
+        self.idle_root.setProperty("theme", key)
+        self.idle_theme_actions[key].setChecked(True)
+
+    def next_idle_theme(self):
+        keys = [k for k, _ in IDLE_THEMES]
+        self.set_idle_theme(keys[(keys.index(self.idle_theme) + 1) % len(keys)])
+
+    def restart_idle_timer(self):
+        if self.idle_enabled:
+            self.idle_timer.start(IDLE_TIMEOUT_MS)
+
+    def on_idle_timeout(self):
+        if not self.enter_idle():
+            self.idle_timer.start(IDLE_RETRY_MS)
+
+    def enter_idle(self, force=False):
+        """Show the idle screen; returns False when it isn't allowed right now."""
+        if self.idle_root is None or self.idle_active:
+            return self.idle_active
+        if not force and (not self.idle_enabled or self.playback_status != "Playing"):
+            return False
+        if not self.isVisible() or self.isMinimized():
+            return False
+        self.idle_active = True
+        self.idle_forced = force
+        self.idle_entered_at = time.monotonic()
+        self.idle_last_pos = None
+        self.push_idle_state()
+        self.stack.setCurrentWidget(self.idle_view)
+        self.idle_view.setFocus()
+        self.idle_root.setProperty("active", True)
+        if self.idle_cycle:
+            self.idle_cycle_timer.start()
+        return True
+
+    def exit_idle(self):
+        if self.idle_active:
+            self.idle_active = False
+            self.idle_forced = False
+            self.idle_cycle_timer.stop()
+            self.idle_root.setProperty("active", False)
+            self.stack.setCurrentWidget(self.view)
+            self.view.setFocus()
+        self.restart_idle_timer()
+
+    def push_idle_state(self):
+        if self.idle_root is not None and self.idle_active:
+            for key, value in self.idle_state.items():
+                self.idle_root.setProperty(key, value)
+
+    def eventFilter(self, obj, event):
+        etype = event.type()
+        if etype == QEvent.Type.MouseMove:
+            pos = event.globalPosition().toPoint()
+            last, self.idle_last_pos = self.idle_last_pos, pos
+            if last is not None and (pos - last).manhattanLength() >= IDLE_MOVE_THRESHOLD:
+                self.note_activity()
+        elif etype in IDLE_ACTIVITY_EVENTS:
+            self.note_activity()
+        return False
+
+    def note_activity(self):
+        if self.idle_active:
+            if time.monotonic() - self.idle_entered_at < IDLE_ENTER_GRACE_S:
+                return
+            self.exit_idle()
+        else:
+            self.restart_idle_timer()
+
+    def hideEvent(self, event):
+        self.exit_idle()
+        super().hideEvent(event)
 
     def tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -778,6 +1006,8 @@ class SoundCloudClient(QMainWindow):
         if status != self.playback_status:
             self.playback_status = status
             changed["PlaybackStatus"] = status
+            if status != "Playing" and self.idle_active and not self.idle_forced:
+                self.exit_idle()
         if metadata != self.mpris_metadata:
             self.mpris_metadata = metadata
             changed["Metadata"] = metadata
@@ -896,6 +1126,15 @@ class SoundCloudClient(QMainWindow):
         if track_url:
             metadata["xesam:url"] = track_url
         self.update_mpris("Playing" if playing else "Paused", metadata, current_sec)
+        self.idle_state = {
+            "title": title,
+            "artist": artist,
+            "cover": cover,
+            "position": current_sec,
+            "duration": total_sec or 1,
+            "playing": playing,
+        }
+        self.push_idle_state()
 
         if not playing:
             self.rpc.set_activity(self.PAUSED_ACTIVITY)
@@ -930,7 +1169,7 @@ class SoundCloudClient(QMainWindow):
             event.accept()
 
 
-if __name__ == "__main__":
+def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="SoundCloud Desktop Player with Discord RPC & MPRIS")
@@ -944,15 +1183,10 @@ if __name__ == "__main__":
     app.setDesktopFileName("soundcloud-rpc")
 
     # Set application icon
-    icon_path = Path(__file__).parent / "soundcloud.png"
-    if not icon_path.exists():
-        icon_path = Path(__file__).parent / "soundcloud.jpg"
-    if icon_path.exists():
-        app.setWindowIcon(QIcon(str(icon_path)))
+    if ICON_PATH.exists():
+        app.setWindowIcon(QIcon(str(ICON_PATH)))
 
     client = SoundCloudClient()
-    if icon_path.exists():
-        client.setWindowIcon(QIcon(str(icon_path)))
 
     if not args.minimized:
         client.show()
@@ -960,3 +1194,7 @@ if __name__ == "__main__":
         print("Starting SoundCloud Desktop minimized to system tray...")
 
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

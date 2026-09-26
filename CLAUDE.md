@@ -4,18 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-A single-file desktop SoundCloud client (`soundcloud_rpc.py`, PySide6/QtWebEngine) that publishes Discord Rich Presence, exposes MPRIS over D-Bus, and lives in the system tray. Linux-only, packaged via a Nix flake. There is no test suite or linter.
+A desktop SoundCloud client (Python package `soundcloud_rpc/`, all logic in `soundcloud_rpc/app.py`, PySide6/QtWebEngine) that publishes Discord Rich Presence, exposes MPRIS over D-Bus, shows a QML idle screen, and lives in the system tray. Linux-only, packaged via a Nix flake (`package.nix`, `pyproject.toml`). There is no test suite or linter.
 
 ## Commands
 
 ```bash
 nix develop                      # dev shell with pyside6 + pypresence (nix-shell uses shell.nix, pinned to flake.lock's nixpkgs)
-python3 soundcloud_rpc.py        # run (add --minimized / -m to start in tray)
+python3 -m soundcloud_rpc        # run (add --minimized / -m to start in tray)
+python3 soundcloud_rpc/qml/preview.py  # gallery of idle themes with fake data
 nix run                          # build and run the packaged app
 nix build                        # produces ./result
 ```
 
-If you add a Python dependency or a new asset file, update `flake.nix` too: the dependency list is duplicated in the package and the devShell, and the installPhase copies files explicitly.
+If you add a Python dependency, update `pyproject.toml` (`dependencies`), `package.nix` (`dependencies`), and the devShell `pythonEnv` in `flake.nix` and `shell.nix`. New assets inside `soundcloud_rpc/` must be listed under `[tool.setuptools.package-data]` in `pyproject.toml`. New files must be `git add`ed before `nix build`, since flakes only see tracked files. The QtQuick modules come from `qt6.qtdeclarative` (via `wrapQtAppsHook` in the package, via `QML_IMPORT_PATH` in the dev shells).
 
 ## Architecture
 
@@ -28,6 +29,8 @@ Everything lives in `SoundCloudClient(QMainWindow)`. Data flow for Rich Presence
 5. **`DiscordRpcWorker`** (own thread + asyncio loop) owns the pypresence connection so blocking IPC never freezes the GUI. It always converges to the latest desired activity, dedupes (`_same`, tolerating <5s timestamp drift), waits 0.25s after the last real change so transient UI states collapse into the final one, and rate limits with a sliding window of 4 updates per 20s (Discord allows ~5; a throttled update is delayed, never dropped). The JS side also has a 1s heartbeat so state changes never depend on an observed DOM mutation, reconnects with 5s backoff and re-sends after reconnect. `DiscordError` (payload rejected) does not tear down the connection. `clean_rpc_text` enforces Discord's 2..128 byte limit on details/state, since violating it used to cause reconnect loops.
 
 Other pieces:
+
+- **Idle screen**: after `IDLE_TIMEOUT_MS` (30s) without input while `playback_status == "Playing"` and the window is visible, `enter_idle` switches the central `QStackedWidget` from the webview to a `QQuickWidget` (`qml/IdleScreen.qml`, which loads `qml/themes/<Theme>.qml` and gets `title/artist/cover/position/duration/playing` from `handle_js_result` through `push_idle_state`). The site keeps running underneath. Input in the site is reported by an injected `activity` script (`SOUNDCLOUD_RPC_ACTIVITY` console message → `note_activity`); input over the idle page is caught by an event filter on `idle_view` only. Do not install a Python event filter on `QApplication`: PySide crashes in `getWrapperForQObject` on non-wrapped QObjects. Theme/enabled/cycle settings live in `QSettings` and the tray's *Idle Screen* menu. Themes are grayscale (Monochrome palette) with the cover as the only color; every theme derives from `themes/ThemeBase.qml`.
 
 - **MPRIS**: `MprisAdaptor` and `MprisPlayerAdaptor` are `QDBusAbstractAdaptor`s registered on the session bus as `org.mpris.MediaPlayer2.soundcloud_rpc`. Playback control works by running JS that clicks the site's own player buttons (`trigger_*` methods). `playback_status` is updated by `handle_js_result`.
 - **Bot-detection bypass**: the profile's User-Agent has the `QtWebEngine/x.y` token stripped, and a `stealth` script is injected at DocumentCreation (webdriver, `window.chrome`, plugins, languages). Cloudflare/DataDome blocks are the reason; don't remove these casually.

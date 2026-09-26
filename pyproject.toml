@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "soundcloud-rpc"
+version = "1.1.0"
+description = "SoundCloud Desktop Player with Discord RPC and MPRIS Integration"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["PySide6", "pypresence"]
+
+[project.scripts]
+soundcloud-rpc = "soundcloud_rpc.app:main"
+
+[tool.setuptools]
+packages = ["soundcloud_rpc"]
+
+[tool.setuptools.package-data]
+soundcloud_rpc = ["soundcloud.png", "qml/*.qml", "qml/themes/*.qml"]
