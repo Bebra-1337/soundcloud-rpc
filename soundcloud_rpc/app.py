@@ -9,7 +9,7 @@ from collections import deque
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from PySide6.QtCore import Qt, QUrl, QTimer, Slot, Property, ClassInfo, QMetaType, QEvent, QSettings
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu, QStackedWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QSystemTrayIcon, QMenu
 from PySide6.QtGui import QIcon, QAction, QActionGroup, QDesktopServices, QShortcut, QKeySequence, QGuiApplication
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor, QWebEngineScript
@@ -441,6 +441,35 @@ class SoundCloudWebPage(QWebEnginePage):
             super().javaScriptConsoleMessage(level, message, lineNumber, sourceID)
 
 
+class OverlayContainer(QWidget):
+    """Shows `base` and lets `overlay` be drawn on top of it, covering the same area.
+
+    The base widget is never hidden: Chromium treats a hidden page as a background tab and throttles its
+    timers to about one per second, which starves SoundCloud's audio buffering and makes playback stutter.
+    """
+
+    def __init__(self, base, overlay):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(base)
+        self.overlay = overlay
+        overlay.setParent(self)
+        overlay.hide()
+
+    def show_overlay(self):
+        self.overlay.setGeometry(self.rect())
+        self.overlay.show()
+        self.overlay.raise_()
+
+    def hide_overlay(self):
+        self.overlay.hide()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.overlay.setGeometry(self.rect())
+
+
 class SoundCloudClient(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -563,7 +592,7 @@ class SoundCloudClient(QMainWindow):
         # Re-inject observer when load finishes
         self.view.loadFinished.connect(self.inject_observer)
 
-        # Idle screen (QML) lives on the second stack page above the site; the site keeps running underneath
+        # Idle screen (QML) is an overlay above the site; the site stays visible and keeps running underneath
         self.idle_view = QQuickWidget()
         self.idle_view.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
         self.idle_view.setMouseTracking(True)
@@ -573,18 +602,8 @@ class SoundCloudClient(QMainWindow):
         if self.idle_root is None:
             print("Idle screen disabled, QML failed to load:", [e.toString() for e in self.idle_view.errors()])
 
-        self.stack = QStackedWidget()
-        self.stack.addWidget(self.view)
-        self.stack.addWidget(self.idle_view)
-
-        # Layout
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.stack)
-
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
+        self.container = OverlayContainer(self.view, self.idle_view)
+        self.setCentralWidget(self.container)
 
         self.init_idle_screen()
 
@@ -925,7 +944,7 @@ class SoundCloudClient(QMainWindow):
         self.idle_entered_at = time.monotonic()
         self.idle_last_pos = None
         self.push_idle_state()
-        self.stack.setCurrentWidget(self.idle_view)
+        self.container.show_overlay()
         self.idle_view.setFocus()
         self.idle_root.setProperty("active", True)
         if self.idle_cycle:
@@ -938,7 +957,7 @@ class SoundCloudClient(QMainWindow):
             self.idle_forced = False
             self.idle_cycle_timer.stop()
             self.idle_root.setProperty("active", False)
-            self.stack.setCurrentWidget(self.view)
+            self.container.hide_overlay()
             self.view.setFocus()
         self.restart_idle_timer()
 
