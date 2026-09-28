@@ -1,5 +1,15 @@
 import sys
 import os
+
+# QtWebEngine's embedded Chromium runs its own Media Session integration, which on Linux publishes a second,
+# separate MPRIS player (org.mpris.MediaPlayer2.chromium.instance<pid>) alongside the one this app registers
+# itself (MprisAdaptor below), so media widgets show the track twice under two different names. This must be
+# set before QtWebEngine starts Chromium (i.e. before any PySide6.QtWebEngine* import), an env var is the only
+# way to reach it.
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
+    os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "") + " --disable-features=HardwareMediaKeyHandling"
+).strip()
+
 import json
 import time
 import asyncio
