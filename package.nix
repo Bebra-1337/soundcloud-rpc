@@ -75,8 +75,12 @@ python3Packages.buildPythonApplication {
   ];
 
   postInstall = ''
+    # hicolor's own index.theme only lists sizes up to 512x512 (then "scalable"); an icon dropped into
+    # 1024x1024/apps sits outside every declared directory, so anything that looks the icon up through the
+    # icon theme (app launchers) silently finds nothing, even though the file exists on disk. The 1024px
+    # source is kept, just filed under the largest size hicolor actually advertises.
     install -Dm644 soundcloud_rpc/soundcloud.png \
-      $out/share/icons/hicolor/1024x1024/apps/soundcloud-rpc.png
+      $out/share/icons/hicolor/512x512/apps/soundcloud-rpc.png
   '';
 
   meta = {
