@@ -58,6 +58,7 @@ QtObject {
     readonly property var missingArt: ({})
 
     readonly property int gutter: 24
+    readonly property int tipDelay: 1000  // ms the pointer rests on something before its tooltip shows
     readonly property int railWidth: 68
     readonly property int panelWidth: 360
 

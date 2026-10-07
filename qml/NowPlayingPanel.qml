@@ -71,7 +71,7 @@ Rectangle {
             TapHandler { onTapped: App.showIdle() }
             ToolTip.visible: coverHover.hovered
             ToolTip.text: "Idle screen"
-            ToolTip.delay: 800
+            ToolTip.delay: Style.tipDelay
 
             Rectangle {
                 anchors.left: parent.left

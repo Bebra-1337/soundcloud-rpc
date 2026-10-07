@@ -96,7 +96,7 @@ Rectangle {
         TapHandler { onTapped: entry.tapped() }
         ToolTip.visible: hh.hovered
         ToolTip.text: entry.label
-        ToolTip.delay: 500
+        ToolTip.delay: Style.tipDelay
     }
 
     ArtImage {
@@ -114,6 +114,6 @@ Rectangle {
         TapHandler { onTapped: rail.openMe() }
         ToolTip.visible: avatarHover.hovered
         ToolTip.text: Api.me.username || ""
-        ToolTip.delay: 500
+        ToolTip.delay: Style.tipDelay
     }
 }

@@ -38,5 +38,5 @@ Item {
     }
     ToolTip.visible: btn.tip !== "" && ma.containsMouse
     ToolTip.text: btn.tip
-    ToolTip.delay: 700
+    ToolTip.delay: Style.tipDelay
 }

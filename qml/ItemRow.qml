@@ -115,6 +115,7 @@ Item {
             Text { id: previewLabel; anchors.centerIn: parent; text: "PREVIEW"; color: Style.inkDim; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 0.8 }
             HoverHandler { id: previewHover }
             ToolTip.visible: previewHover.hovered
+            ToolTip.delay: Style.tipDelay
             ToolTip.text: row.item.fullOnlyOnSite
                           ? "30-second preview here: the full track is DRM-protected and plays in full only on soundcloud.com"
                           : "30-second preview: SoundCloud gives this account only a snippet (Go+)"
@@ -127,6 +128,7 @@ Item {
             color: Style.inkFaint
             HoverHandler { id: lockHover }
             ToolTip.visible: lockHover.hovered
+            ToolTip.delay: Style.tipDelay
             ToolTip.text: "Only playable on soundcloud.com (DRM)"
         }
         IconButton {
