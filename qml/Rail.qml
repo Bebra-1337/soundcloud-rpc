@@ -20,14 +20,16 @@ Rectangle {
     width: Style.railWidth
     color: Style.panel
 
-    ArtImage {
+    Image {
         id: logo
         anchors.horizontalCenter: parent.horizontalCenter
-        y: 16
-        width: 30
-        height: 30
-        radius: 8
-        source: "qrc:/soundcloud.png"
+        y: 18
+        width: 40
+        height: 22
+        source: "qrc:/logo.png"
+        sourceSize: Qt.size(width * 2, height * 2)
+        fillMode: Image.PreserveAspectFit
+        smooth: true
     }
 
     Column {

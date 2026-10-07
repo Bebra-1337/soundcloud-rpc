@@ -17,10 +17,11 @@ qt_add_qml_module(scidle
     NO_LINT
 )
 
-# The app icon doubles as the preview's default cover (qrc:/soundcloud.png).
+# App assets referenced from QML/C++ as qrc:/soundcloud.png (OS/tray icon, preview cover) and qrc:/logo.png
+# (the wordmark glyph shown in the rail and the sign-in panel).
 qt_add_resources(scidle "app_assets"
     PREFIX "/"
     BASE "${PROJECT_SOURCE_DIR}"
-    FILES "${PROJECT_SOURCE_DIR}/soundcloud.png")
+    FILES "${PROJECT_SOURCE_DIR}/soundcloud.png" "${PROJECT_SOURCE_DIR}/logo.png")
 
 target_link_libraries(scidle PRIVATE Qt6::Quick)

@@ -19,6 +19,7 @@ stdenv.mkDerivation {
       ./src
       ./qml
       ./soundcloud.png
+      ./logo.png
     ];
   };
 

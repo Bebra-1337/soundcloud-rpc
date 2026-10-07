@@ -13,12 +13,14 @@ Rectangle {
         width: Math.min(parent.width - 48, 420)
         spacing: 14
 
-        ArtImage {
+        Image {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 64
-            height: 64
-            radius: 16
-            source: "qrc:/soundcloud.png"
+            width: 128
+            height: 58
+            source: "qrc:/logo.png"
+            sourceSize: Qt.size(width * 2, height * 2)
+            fillMode: Image.PreserveAspectFit
+            smooth: true
         }
         Text {
             width: parent.width
