@@ -15,6 +15,7 @@ add_subdirectory(qml/idle)
 qt_add_executable(soundcloud-rpc
     src/main.cpp
     src/app/Application.h src/app/Application.cpp
+    src/app/ThemeWatcher.h src/app/ThemeWatcher.cpp
     src/api/ClientIdProvider.h src/api/ClientIdProvider.cpp
     src/api/SoundCloudApi.h src/api/SoundCloudApi.cpp
     src/api/AuthManager.h src/api/AuthManager.cpp

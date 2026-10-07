@@ -1,5 +1,7 @@
 #include "app/Application.h"
 
+#include "app/ThemeWatcher.h"
+
 #include "api/AuthManager.h"
 #include "api/Entities.h"
 #include "api/SoundCloudApi.h"
@@ -52,6 +54,7 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
     m_analyser = new AudioAnalyser(m_player->mediaPlayer(), this);
     m_discord = new DiscordPresence(m_player, this);
     m_mpris = new Mpris(m_player, this, this);
+    new ThemeWatcher(this);
 
     connect(m_auth, &AuthManager::tokenChanged, m_api, &SoundCloudApi::setToken);
     connect(m_api, &SoundCloudApi::authRejected, m_auth, &AuthManager::rejectToken);
