@@ -1,8 +1,9 @@
 import QtQuick
 import ScBackend
 
-// SoundCloud-style waveform seek bar. The played part is the same bars drawn in ink and clipped to the
-// progress, so only one clip width changes while playing.
+// SoundCloud-style waveform seek bar. Each bar takes the accent color as the progress passes it, the bar under
+// the progress edge in between by the fraction already played: a clip would only move in whole pixels, which on a
+// ~310 px bar and a 5 minute track is one visible step a second.
 Item {
     id: wf
 
@@ -12,42 +13,25 @@ Item {
     property real dragProgress: -1
     readonly property real shown: dragProgress >= 0 ? dragProgress : progress
 
-    component Bars: Row {
+    Row {
         id: bars
-        property var samples: []
-        property color barColor
-        property real fullHeight
-        spacing: 1
-        Repeater {
-            model: bars.samples.length
-            Rectangle {
-                required property int index
-                width: Math.max(1, (bars.width - (bars.samples.length - 1) * bars.spacing) / bars.samples.length)
-                height: Math.max(2, bars.samples[index] * bars.fullHeight)
-                y: (bars.fullHeight - height) / 2
-                radius: width / 2
-                color: bars.barColor
-            }
-        }
-    }
-
-    Bars {
         width: wf.width
         height: wf.height
-        samples: wf.samples
-        fullHeight: wf.height
-        barColor: Style.outline
-    }
-    Item {
-        width: wf.width * wf.shown
-        height: wf.height
-        clip: true
-        Bars {
-            width: wf.width
-            height: wf.height
-            samples: wf.samples
-            fullHeight: wf.height
-            barColor: Style.accent
+        spacing: 1
+        readonly property real barWidth: Math.max(1, (width - (wf.samples.length - 1) * spacing) / wf.samples.length)
+        readonly property real playedX: wf.shown * width
+
+        Repeater {
+            model: wf.samples.length
+            Rectangle {
+                required property int index
+                readonly property real played: Math.max(0, Math.min(1, (bars.playedX - index * (bars.barWidth + bars.spacing)) / bars.barWidth))
+                width: bars.barWidth
+                height: Math.max(2, wf.samples[index] * wf.height)
+                y: (wf.height - height) / 2
+                radius: width / 2
+                color: played <= 0 ? Style.outline : (played >= 1 ? Style.accent : Style.mix(Style.outline, Style.accent, played))
+            }
         }
     }
     Rectangle {
