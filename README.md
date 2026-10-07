@@ -1,6 +1,6 @@
 # SoundCloud Desktop Player
 
-A desktop client for **SoundCloud** with Discord Rich Presence integration, MPRIS D-Bus controls, system tray support, and ad-blocking capabilities.
+A native desktop client for **SoundCloud** (C++ / Qt Quick) with Discord Rich Presence, MPRIS D-Bus controls and a system tray. You sign in with your own SoundCloud account; the client shows the same Home, Feed and Library as soundcloud.com in its own player instead of the website.
 
 ![SoundCloud Desktop](soundcloud.png)
 
@@ -8,16 +8,15 @@ A desktop client for **SoundCloud** with Discord Rich Presence integration, MPRI
 
 ## ✨ Features
 
-- 🎵 **Full SoundCloud Web Experience**: Built on QtWebEngine with bot-detection bypass.
-- 🎧 **Discord Rich Presence**: Displays track title, artist name, elapsed/remaining time, artwork cover, and play/pause status in your Discord activity.
-- 🎛️ **Linux MPRIS D-Bus Integration**: Full media keys support & compatibility with Linux desktop status bars/widgets (Waybar, Polybar, Noctalia, KDE Plasma, GNOME).
-- 📌 **System Tray Integration**: Background playback, tray context menu with Play/Pause, Show/Hide Window, and Quit actions.
-- 📋 **Copy Track Link**: Copy the currently playing song's URL directly to your clipboard from the tray menu.
-- 🌌 **Idle Screen**: a round button in the bottom-right corner of the window (or *Idle Screen → Show Idle Screen* in the tray menu) covers the site with a native QML "now playing" scene (cover, title, time remaining) with 15 switchable themes (default: Glass Card, all in grayscale). A click or key press returns to the site, and playback is not interrupted. Pick the theme from the tray menu: *Idle Screen*. Some themes react to the actual music: in *Particles* the glow of the dots follows the bass and kicks release bursts of particles, *Equalizer* draws the real spectrum with falling peaks, and *Stereo Mirror* shows the left and right channels separately (sound that plays in one ear lights up one side).
-- 🔍 **Keyboard Shortcut (`Ctrl + F`)**: Instantly focus and select SoundCloud's top search bar.
-- 🔗 **External Browser Router**: Links in artist profiles (Instagram, Twitter, Spotify, etc.) and `gate.sc` redirects automatically open in your default desktop browser.
-- 🛡️ **Built-in AdBlocker**: Suppresses audio & display promotions without breaking playback.
-- 🚀 **Autostart / Minimized Launch**: Supports starting directly in the system tray via `--minimized` (`-m`).
+- 🎵 **Native player**: Home (recently played + SoundCloud's selections), Feed, Library (likes, playlists & albums, history, following), Search (or paste a soundcloud.com link), playlist/album and artist pages, a play queue with shuffle/repeat and autoplay of related tracks, likes, and a SoundCloud-style waveform seek bar. No embedded website: pages are Qt Quick, audio is played by QtMultimedia (FFmpeg).
+- 🔐 **Your own account**: signing in happens once on soundcloud.com's own sign-in page in a small window; the session token is then kept in `~/.config/soundcloud_rpc/token` (mode 0600). *Sign Out* is in the tray menu.
+- 🎧 **Discord Rich Presence**: track title, artist, artwork, exact elapsed/remaining time and a "Listen on SoundCloud" button.
+- 🎛️ **MPRIS D-Bus**: media keys, playerctl and desktop widgets (Waybar, Noctalia, KDE Plasma, GNOME), including seeking, volume, shuffle and loop.
+- 📌 **System tray**: closing the window keeps playing in the background; Play/Pause, Next/Previous, Copy Track Link, Idle Screen, Sign Out, Quit.
+- 🌌 **Idle Screen**: click the cover (or the screen button, or `Ctrl+I`) for a full-window "now playing" scene with 15 grayscale themes; some react to the actual music (spectrum, stereo channels, kicks). A click or key press returns.
+- ⌨️ **Shortcuts**: `Space` play/pause, `←/→` seek 5 s, `Ctrl+←/→` previous/next, `Ctrl+F` search, `Ctrl+L` like, `Ctrl+Shift+C` copy track link, `Esc` back.
+
+> Tracks that SoundCloud only serves with DRM (Widevine, part of the major-label catalogue) can't be played by this client; they are marked with a lock and skipped. Go+ previews play their 30-second snippet, like on the site.
 
 ---
 
@@ -54,15 +53,15 @@ environment.systemPackages = [ pkgs.soundcloud-rpc ];
 
 ### Development Shell
 
-Start a development shell with all dependencies (`PySide6`, `pypresence`, QtQuick modules):
 ```bash
 nix develop   # or, without flakes: nix-shell
-python3 -m soundcloud_rpc
+cmake -B build -G Ninja && cmake --build build
+./build/soundcloud-rpc
 ```
 
-Preview all idle themes with fake data (←/→ switch theme, Space play/pause, T long title, C no cover, A auto-cycle):
+Preview all idle themes with fake data (←/→ switch theme, Space play/pause, T long title, C no cover, A auto-cycle, M fake music):
 ```bash
-python3 soundcloud_rpc/qml/preview.py                      # add --fixed --size 1431x500 for a fixed-size window
+./build/soundcloud-rpc-preview --fixed --size 1431x500 --music
 ```
 
 ---
@@ -70,11 +69,15 @@ python3 soundcloud_rpc/qml/preview.py                      # add --fixed --size 
 ## ⚙️ Command-Line Flags
 
 ```text
-usage: soundcloud-rpc [-h] [--minimized]
+Usage: soundcloud-rpc [options] [url...]
 
-options:
-  -h, --help        Show help message and exit
-  --minimized, -m   Start application minimized to system tray
+Options:
+  -h, --help                   Displays help.
+  -v, --version                Displays version information.
+  -m, -t, --minimized, --tray  Start application minimized to system tray
+
+Arguments:
+  url                          SoundCloud links to open
 ```
 
 ---

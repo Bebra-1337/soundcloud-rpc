@@ -1,50 +1,42 @@
 {
   lib,
-  python3Packages,
+  stdenv,
+  cmake,
+  ninja,
   qt6,
   makeDesktopItem,
   copyDesktopItems,
 }:
 
-python3Packages.buildPythonApplication {
+stdenv.mkDerivation {
   pname = "soundcloud-rpc";
-  version = "1.1.0";
-  pyproject = true;
+  version = "2.0.0";
 
   src = lib.fileset.toSource {
     root = ./.;
     fileset = lib.fileset.unions [
-      ./pyproject.toml
-      ./soundcloud_rpc
+      ./CMakeLists.txt
+      ./src
+      ./qml
+      ./soundcloud.png
     ];
   };
 
-  build-system = [ python3Packages.setuptools ];
-
-  dependencies = with python3Packages; [
-    pyside6
-    pypresence
-  ];
-
   nativeBuildInputs = [
+    cmake
+    ninja
     qt6.wrapQtAppsHook
     copyDesktopItems
   ];
 
-  # qtdeclarative provides the QtQuick modules used by the idle screen; wrapQtAppsHook adds their
-  # QML/plugin paths to the wrapper so no environment variables are needed at runtime.
   buildInputs = [
     qt6.qtbase
     qt6.qtdeclarative
-    qt6.qtwebengine
+    qt6.qtmultimedia # QMediaPlayer with the FFmpeg backend (HLS, QAudioBufferOutput for the visualiser)
+    qt6.qtwebengine # only for the one-time sign-in window
     qt6.qtwayland
+    qt6.qtsvg
   ];
-
-  # Wrap once, through the Python wrapper, instead of wrapping the entry point twice.
-  dontWrapQtApps = true;
-  preFixup = ''
-    makeWrapperArgs+=("''${qtWrapperArgs[@]}")
-  '';
 
   desktopItems = [
     (makeDesktopItem {
@@ -79,7 +71,7 @@ python3Packages.buildPythonApplication {
     # 1024x1024/apps sits outside every declared directory, so anything that looks the icon up through the
     # icon theme (app launchers) silently finds nothing, even though the file exists on disk. The 1024px
     # source is kept, just filed under the largest size hicolor actually advertises.
-    install -Dm644 soundcloud_rpc/soundcloud.png \
+    install -Dm644 $src/soundcloud.png \
       $out/share/icons/hicolor/512x512/apps/soundcloud-rpc.png
   '';
 

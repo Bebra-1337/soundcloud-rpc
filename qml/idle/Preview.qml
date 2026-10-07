@@ -12,7 +12,7 @@ Window {
     title: "Idle themes preview"
 
     property string shotsDir: ""
-    property url coverUrl: Qt.resolvedUrl("../soundcloud.png")
+    property url coverUrl: "qrc:/soundcloud.png"
     property string themeFilter: ""
     readonly property var allThemes: ["BlurCover", "Aurora", "Vinyl", "Cassette", "Particles", "Equalizer", "Polaroid",
         "Stereo", "MinimalClock", "Typography", "Neon", "AlbumWall", "Orbit", "GlassCard", "Starfield"]

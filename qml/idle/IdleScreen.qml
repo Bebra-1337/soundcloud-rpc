@@ -1,6 +1,6 @@
 import QtQuick
 
-// Host for the idle themes: Python sets these properties, the selected theme scene only draws them.
+// Host for the idle themes: the app sets these properties, the selected theme scene only draws them.
 Item {
     id: host
 
@@ -9,7 +9,7 @@ Item {
     property string title: ""
     property string artist: ""
     property url cover: ""
-    property real syncPosition: 0  // last position reported by the site (whole seconds, irregular phase)
+    property real syncPosition: 0  // player position in seconds, reported a few times a second
     property real position: 0      // smooth position shown by the themes
     property real duration: 1
     property bool playing: true
@@ -26,9 +26,8 @@ Item {
 
     Rectangle { anchors.fill: parent; color: "#111111" }
 
-    // The site reports whole seconds with an irregular phase. Following every report makes the bar and the
-    // digits jump back and forth (0:23, 0:21, 0:22), so the position is extrapolated from an anchor and only
-    // re-anchored when the report disagrees with it by more than a second and a half (seek, new track).
+    // Between the player's reports the position is extrapolated from the last one, so bars and digits move
+    // smoothly whatever the report rate is.
     property double anchorMs: 0
     property real anchorPos: 0
     function reanchor(p) {
@@ -36,11 +35,8 @@ Item {
         anchorMs = Date.now()
         position = Math.min(duration, p)
     }
-    onSyncPositionChanged: {
-        if (!playing || Math.abs(syncPosition + 0.5 - position) > 1.6)
-            reanchor(syncPosition)
-    }
-    onPlayingChanged: reanchor(playing ? position : syncPosition)
+    onSyncPositionChanged: reanchor(syncPosition)
+    onPlayingChanged: reanchor(syncPosition)
     onActiveChanged: if (active) reanchor(syncPosition)
     Timer {
         interval: 200; repeat: true; running: host.active && host.playing

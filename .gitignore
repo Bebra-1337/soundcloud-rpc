@@ -1,4 +1,6 @@
 /result
+/build/
 __pycache__/
 *.pyc
 .nix-gc*
+/.cache/

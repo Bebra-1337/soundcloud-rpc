@@ -32,18 +32,13 @@
       devShells = forAllSystems (system:
         let
           pkgs = pkgsFor system;
-          pythonEnv = pkgs.python3.withPackages (ps: with ps; [
-            pyside6
-            pypresence
-          ]);
         in
         {
           default = pkgs.mkShell {
-            packages = [ pythonEnv ];
-            # QtQuick modules for the idle screen (the PySide6 wheel does not ship them)
-            QML_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
+            inputsFrom = [ self.packages.${system}.default ];
+            packages = with pkgs; [ clang-tools gdb ];
             shellHook = ''
-              echo "SoundCloud RPC dev shell — run: python3 -m soundcloud_rpc"
+              echo "SoundCloud RPC dev shell — build: cmake -B build -G Ninja && cmake --build build"
             '';
           };
         }
