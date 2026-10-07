@@ -14,7 +14,18 @@ ApplicationWindow {
     minimumWidth: 900
     minimumHeight: 420
     visible: false  // shown from C++ after the surface format is set (or not at all with --minimized)
-    title: Player.hasTrack ? Player.current.title + " · " + Player.current.artist : "SoundCloud Desktop"
+    // Window managers match the title when a window maps (the user's Hyprland rule floats and places
+    // "^SoundCloud Desktop$", which also tells it from the sign-in window), and a window shown again maps again:
+    // keep the plain title until a second after it is shown, the track's only then. A queue restored from the last
+    // session would otherwise put the track in the title before the very first map.
+    property bool trackTitle: false
+    onVisibleChanged: {
+        trackTitle = false
+        if (visible)
+            trackTitleDelay.restart()
+    }
+    Timer { id: trackTitleDelay; interval: 1000; onTriggered: win.trackTitle = true }
+    title: trackTitle && Player.hasTrack ? Player.current.title + " · " + Player.current.artist : "SoundCloud Desktop"
     color: Style.bg
 
     palette {
