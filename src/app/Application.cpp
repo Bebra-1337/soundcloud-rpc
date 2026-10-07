@@ -261,7 +261,9 @@ void Application::quit()
 void Application::createTray()
 {
     m_tray = new QSystemTrayIcon(this);
-    QIcon icon = QIcon::fromTheme(QStringLiteral("soundcloud-rpc"), QIcon(QStringLiteral(":/soundcloud.png")));
+    // the bundled icon directly, not QIcon::fromTheme: a themed "soundcloud-rpc" from another install (e.g. an
+    // older package) would otherwise show a different icon in the tray than the window and the UI use
+    QIcon icon(QStringLiteral(":/soundcloud.png"));
     if (icon.isNull())
         icon = QIcon::fromTheme(QStringLiteral("audio-player"), QIcon::fromTheme(QStringLiteral("audio-x-generic")));
     m_tray->setIcon(icon);
