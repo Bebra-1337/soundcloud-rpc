@@ -17,7 +17,7 @@ nix run                                       # build and run the packaged app
 nix build                                     # produces ./result
 ```
 
-New source or QML files must be added to `CMakeLists.txt` (main UI: the `ui_qml` list; idle themes: `qml/idle/CMakeLists.txt`) and `git add`ed before `nix build`, since flakes only see tracked files. Qt logs go to the journal when stderr is not a terminal; set `QT_FORCE_STDERR_LOGGING=1` to see them in a pipe. `main.cpp` adds `--log-level=3` to `QTWEBENGINE_CHROMIUM_FLAGS` (Chromium's ERROR spam about the website's third-party requests) unless the variable already sets a log level; FFmpeg's own log is lowered to errors unless `QT_FFMPEG_DEBUG` is set.
+New source or QML files must be added to `CMakeLists.txt` (main UI: the `ui_qml` list; idle themes: `qml/idle/CMakeLists.txt`) and `git add`ed before `nix build`, since flakes only see tracked files. Qt logs go to the journal when stderr is not a terminal; set `QT_FORCE_STDERR_LOGGING=1` to see them in a pipe. `main.cpp` adds `--log-level=3` to `QTWEBENGINE_CHROMIUM_FLAGS` (Chromium's ERROR spam about the website's third-party requests) unless the variable already sets a log level; FFmpeg's own log is lowered to errors unless `QT_FFMPEG_DEBUG` is set, and its routine `Error reading HTTP response: End of file` (the CDN closing a kept-alive connection between HLS segments) is dropped; `main.cpp`'s message handler drops Qt Quick's warnings about images answered with 4xx (missing artwork sizes, which `ArtImage` handles).
 
 ## Platforms
 

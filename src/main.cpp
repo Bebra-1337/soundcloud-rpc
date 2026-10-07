@@ -5,8 +5,23 @@
 #include <QIcon>
 #include <QLoggingCategory>
 
+// Artwork that doesn't exist is routine: sndcdn.com 404s some sizes of some covers, and ArtImage then tries the
+// next size or the avatar. Qt Quick still warns about every one of those; drop them, pass everything else on
+// (other image errors, such as a connection the CDN closed, stay visible).
+static QtMessageHandler defaultHandler = nullptr;
+
+static void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
+{
+    if (type == QtWarningMsg && message.contains(QLatin1StringView("QQuickImage: Error transferring"))
+        && message.contains(QLatin1StringView("server replied with status code 4")))
+        return;
+    defaultHandler(type, context, message);
+}
+
 int main(int argc, char *argv[])
 {
+    defaultHandler = qInstallMessageHandler(messageHandler);
+
     // the sign-in window (QtWebEngine) shares GL contexts with Qt Quick
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 

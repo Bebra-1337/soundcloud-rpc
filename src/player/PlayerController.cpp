@@ -20,11 +20,34 @@
 #include <dlfcn.h>
 #include <link.h>
 #include <cmath>
+#include <cstdarg>
+#include <cstdio>
 #include <numeric>
 
 // FFmpeg logs every HLS segment it opens (with its signed URL) at info level to stderr. Qt loads FFmpeg as
 // libraries of its multimedia plugin, so find the already loaded libavutil and lower its log level to errors
 // (QT_FFMPEG_DEBUG keeps the full output).
+// One error is routine too: the CDN closes a kept-alive HTTP connection between HLS segments and FFmpeg says
+// "Error reading HTTP response: End of file" before it opens a new one. That line is dropped, everything else
+// goes to FFmpeg's own logger. This replaces Qt's callback, which without QT_FFMPEG_DEBUG forwards to the same
+// default logger except in threads where Qt silences it for its own hardware probing, done by now.
+using AvLogCallback = void (*)(void *, int, const char *, va_list);
+static AvLogCallback avDefaultLog = nullptr;
+
+static void filteredAvLog(void *avcl, int level, const char *fmt, va_list vl)
+{
+    if (fmt && std::strstr(fmt, "Error reading HTTP response")) {
+        char text[256];
+        va_list copy;
+        va_copy(copy, vl);
+        std::vsnprintf(text, sizeof text, fmt, copy);
+        va_end(copy);
+        if (std::strstr(text, "End of file"))
+            return;
+    }
+    avDefaultLog(avcl, level, fmt, vl);
+}
+
 static void quietFFmpeg()
 {
     if (qEnvironmentVariableIsSet("QT_FFMPEG_DEBUG"))
@@ -36,6 +59,11 @@ static void quietFFmpeg()
             using SetLevel = void (*)(int);
             if (auto setLevel = reinterpret_cast<SetLevel>(dlsym(lib, "av_log_set_level")))
                 setLevel(16);  // AV_LOG_ERROR
+            using SetCallback = void (*)(AvLogCallback);
+            auto setCallback = reinterpret_cast<SetCallback>(dlsym(lib, "av_log_set_callback"));
+            avDefaultLog = reinterpret_cast<AvLogCallback>(dlsym(lib, "av_log_default_callback"));
+            if (setCallback && avDefaultLog)
+                setCallback(filteredAvLog);
             dlclose(lib);
         }
         return 0;
