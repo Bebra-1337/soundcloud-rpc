@@ -5,7 +5,7 @@ Row {
     id: bars
 
     property bool running: true
-    property color color: Style.ink
+    property color color: Style.accent
 
     spacing: 2
     height: 14

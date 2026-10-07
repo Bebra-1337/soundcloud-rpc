@@ -41,11 +41,11 @@ Item {
         width: 40
         height: 40
         radius: 20
-        color: playHover.hovered ? "#ffffff" : Style.ink
+        color: playHover.hovered ? Style.accentHover : Style.accent
         visible: !card.isUser
         opacity: hover.hovered ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 140 } }
-        Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 1; name: "play"; size: 18; color: Style.inkOnLight }
+        Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 1; name: "play"; size: 18; color: Style.onAccent }
         HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
         TapHandler { onTapped: card.playRequested() }
     }

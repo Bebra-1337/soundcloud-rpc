@@ -85,9 +85,9 @@ Item {
                 width: 44
                 height: 44
                 radius: 22
-                color: playHover.hovered ? "#ffffff" : Style.ink
+                color: playHover.hovered ? Style.accentHover : Style.accent
                 opacity: tracks.count > 0 ? 1 : 0.4
-                Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 1; name: "play"; size: 20; color: Style.inkOnLight }
+                Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 1; name: "play"; size: 20; color: Style.onAccent }
                 HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
                     onTapped: if (tracks.count > 0) {

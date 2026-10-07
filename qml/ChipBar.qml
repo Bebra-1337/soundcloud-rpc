@@ -19,13 +19,13 @@ Row {
             height: 30
             width: label.implicitWidth + 28
             radius: 15
-            color: active ? Style.ink : (hh.hovered ? Style.hover : Style.raised)
+            color: active ? Style.accent : (hh.hovered ? Style.hover : Style.raised)
             Behavior on color { ColorAnimation { duration: 120 } }
             Text {
                 id: label
                 anchors.centerIn: parent
                 text: chip.modelData.label
-                color: chip.active ? Style.inkOnLight : Style.ink
+                color: chip.active ? Style.onAccent : Style.ink
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }

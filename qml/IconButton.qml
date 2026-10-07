@@ -27,7 +27,7 @@ Item {
         name: btn.icon
         size: btn.iconSize
         filled: btn.filled
-        color: btn.active || ma.containsMouse ? Style.ink : btn.color
+        color: btn.active ? Style.accent : (ma.containsMouse ? Style.ink : btn.color)
     }
     MouseArea {
         id: ma

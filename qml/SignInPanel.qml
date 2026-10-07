@@ -47,12 +47,12 @@ Rectangle {
             width: signLabel.implicitWidth + 44
             height: 40
             radius: 20
-            color: signHover.hovered ? "#ffffff" : Style.ink
+            color: signHover.hovered ? Style.accentHover : Style.accent
             Text {
                 id: signLabel
                 anchors.centerIn: parent
                 text: Auth.signingIn ? "Show sign-in window" : "Sign in"
-                color: Style.inkOnLight
+                color: Style.onAccent
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
             }

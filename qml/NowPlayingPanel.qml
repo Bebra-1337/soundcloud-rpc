@@ -30,8 +30,8 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "#00111111" }
-            GradientStop { position: 1.0; color: "#cc111111" }
+            GradientStop { position: 0.0; color: Style.withAlpha(Style.panel, 0) }
+            GradientStop { position: 1.0; color: Style.withAlpha(Style.panel, 0.8) }
         }
     }
 
@@ -81,7 +81,7 @@ Rectangle {
                 width: snipLabel.implicitWidth + 14
                 height: 20
                 radius: 5
-                color: "#cc111111"
+                color: Style.withAlpha(Style.bg, 0.8)
                 Text { id: snipLabel; anchors.centerIn: parent; text: "PREVIEW"; color: Style.ink; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 0.8 }
             }
         }
@@ -167,7 +167,7 @@ Rectangle {
                 width: 50
                 height: 50
                 radius: 25
-                color: playHover.hovered ? "#ffffff" : Style.ink
+                color: playHover.hovered ? Style.accentHover : Style.accent
                 scale: playTap.pressed ? 0.94 : 1
                 Behavior on scale { NumberAnimation { duration: 90 } }
                 Icon {
@@ -175,14 +175,14 @@ Rectangle {
                     anchors.horizontalCenterOffset: Player.playing ? 0 : 1
                     name: Player.playing ? "pause" : "play"
                     size: 22
-                    color: Style.inkOnLight
+                    color: Style.onAccent
                 }
                 Spinner {
                     anchors.fill: parent
                     anchors.margins: -5
                     visible: Player.loading
                     lineWidth: 2
-                    color: Style.ink
+                    color: Style.accent
                 }
                 HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { id: playTap; onTapped: Player.togglePlay() }
@@ -207,7 +207,7 @@ Rectangle {
                     anchors.top: parent.top
                     anchors.margins: 3
                     text: "1"
-                    color: Style.ink
+                    color: Style.accent
                     font.pixelSize: 9
                     font.weight: Font.Bold
                 }
@@ -274,7 +274,7 @@ Rectangle {
                         width: volume.visualPosition * parent.width
                         height: parent.height
                         radius: 2
-                        color: Player.muted ? Style.inkFaint : Style.ink
+                        color: Player.muted ? Style.inkFaint : Style.accent
                     }
                 }
                 handle: Rectangle {
@@ -283,7 +283,7 @@ Rectangle {
                     width: 12
                     height: 12
                     radius: 6
-                    color: Style.ink
+                    color: Style.accent
                     visible: volume.hovered || volume.pressed
                 }
             }

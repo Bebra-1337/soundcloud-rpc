@@ -58,7 +58,7 @@ Rectangle {
                     width: 3
                     height: entry.active ? 20 : 0
                     radius: 2
-                    color: Style.ink
+                    color: Style.accent
                     Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                 }
                 Icon {

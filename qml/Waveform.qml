@@ -47,7 +47,7 @@ Item {
             height: wf.height
             samples: wf.samples
             fullHeight: wf.height
-            barColor: Style.ink
+            barColor: Style.accent
         }
     }
     Rectangle {
