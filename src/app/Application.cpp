@@ -1,4 +1,5 @@
 #include "app/Application.h"
+#include "app/QmlNetwork.h"
 
 #ifdef Q_OS_LINUX
 #include "app/ThemeWatcher.h"
@@ -143,6 +144,8 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
     qmlRegisterType<PagedListModel>("ScBackend", 1, 0, "PagedListModel");
 
     m_engine = new QQmlApplicationEngine(this);
+    m_qmlNetwork = new QmlNetworkFactory;
+    m_engine->setNetworkAccessManagerFactory(m_qmlNetwork);
     m_engine->loadFromModule("SoundCloudRpc", "Main");
     if (!m_engine->rootObjects().isEmpty())
         m_window = qobject_cast<QQuickWindow *>(m_engine->rootObjects().constFirst());
@@ -200,6 +203,7 @@ Application::~Application()
     // the engine's QML objects reference the backend singletons: destroy it first; then the web pages (sign-in,
     // the anti-bot fallback) before the browser profile they share
     delete m_engine;
+    delete m_qmlNetwork;
     delete m_api;
     delete m_auth;
     webprofile::destroyNow();
@@ -439,6 +443,11 @@ void Application::openSoundCloudUrl(const QString &url)
         raiseWindow();
         emit openItemRequested(item);
     }, [this](int, const QString &err) { emit toast(QStringLiteral("Could not open the link (%1)").arg(err)); });
+}
+
+bool Application::isGone(const QString &url) const
+{
+    return QmlNetworkFactory::isGone(url);
 }
 
 void Application::quit()

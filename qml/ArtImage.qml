@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import ScBackend
 
 // Artwork with rounded (or circular) corners and a placeholder while loading or when there is none.
 //
@@ -34,7 +35,22 @@ Item {
         return out
     }
     property int attempt: 0
-    onCandidatesChanged: attempt = 0
+    // An error is not always a missing image: the CDN sometimes closes its HTTP/2 connection while covers are
+    // still loading over it ("Connection closed"). A URL the server answered with 4xx moves on to the next
+    // candidate at once; one that failed in transit is retried (twice) before it counts as missing.
+    readonly property var retryDelays: [1500, 5000]
+    property int retries: 0
+    property bool waiting: false
+    onCandidatesChanged: {
+        attempt = 0
+        retries = 0
+        waiting = false
+        retryTimer.stop()
+    }
+    Timer {
+        id: retryTimer
+        onTriggered: art.waiting = false
+    }
     // the URL that actually loaded (a fallback size or the avatar), empty while loading or when none did
     readonly property url resolved: img.status === Image.Ready ? img.source : ""
 
@@ -53,9 +69,19 @@ Item {
     Image {
         id: img
         visible: false  // only the texture provider for the shape below
-        source: art.attempt < art.candidates.length ? art.candidates[art.attempt] : ""
-        onStatusChanged: if (status === Image.Error) {
+        source: !art.waiting && art.attempt < art.candidates.length ? art.candidates[art.attempt] : ""
+        onStatusChanged: {
+            if (status !== Image.Error)
+                return
+            if (!App.isGone("" + source) && art.retries < art.retryDelays.length) {
+                // the source goes empty and comes back, which loads it again
+                retryTimer.interval = art.retryDelays[art.retries++]
+                art.waiting = true
+                retryTimer.start()
+                return
+            }
             Style.missingArt["" + source] = true
+            art.retries = 0
             art.attempt++
         }
         sourceSize.width: Math.ceil(art.width * 2)

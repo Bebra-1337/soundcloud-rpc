@@ -11,6 +11,7 @@ class QSystemTrayIcon;
 class QMenu;
 class QActionGroup;
 class QTimer;
+class QmlNetworkFactory;
 class SoundCloudApi;
 class AuthManager;
 class PlayerController;
@@ -75,6 +76,8 @@ public:
     // a soundcloud.com link (pasted, from the command line or MPRIS OpenUri): play or open it
     Q_INVOKABLE void openSoundCloudUrl(const QString &url);
     Q_INVOKABLE void quit();
+    // the server answered this URL with a 4xx: the image doesn't exist (ArtImage)
+    Q_INVOKABLE bool isGone(const QString &url) const;
 
     // Navigation requests from anywhere in the UI (handlers, popups, delegates), handled by Main.qml.
     Q_INVOKABLE void openItem(const QVariantMap &item) { emit openItemRequested(item); }
@@ -114,6 +117,7 @@ private:
     Mpris *m_mpris;
 #endif
     QQmlApplicationEngine *m_engine;
+    QmlNetworkFactory *m_qmlNetwork;  // must outlive the engine
     QPointer<QQuickWindow> m_window;
     QSystemTrayIcon *m_tray = nullptr;
     QMenu *m_trayMenu = nullptr;
