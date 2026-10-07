@@ -43,6 +43,7 @@ QString DiscordPresence::cleanText(const QString &text)
     return out;
 }
 
+// The status stays in English whatever the app's language: other people read it in their Discord.
 void DiscordPresence::update()
 {
     DiscordActivity a;
@@ -51,11 +52,10 @@ void DiscordPresence::update()
     a.smallImage = kIcon;
 
     if (!m_player->hasTrack() || m_player->restored()) {  // a queue restored from the last session isn't listening
-        //: Discord status while nothing plays (shown to your Discord friends)
-        a.details = tr("Exploring SoundCloud");
-        a.state = tr("Browsing tracks...");
+        a.details = QStringLiteral("Exploring SoundCloud");
+        a.state = QStringLiteral("Browsing tracks...");
     } else if (!m_player->playing()) {
-        a.details = tr("Paused");
+        a.details = QStringLiteral("Paused");
     } else if (!m_player->audible()) {
         // Loading the stream (a skip, a resume after a long pause) or stalled: the clock in Discord would run
         // ahead of the music, so keep what is shown until sound actually comes out.
@@ -63,7 +63,7 @@ void DiscordPresence::update()
     } else {
         const QVariantMap t = m_player->current();
         a.details = cleanText(t.value(QStringLiteral("title")).toString());
-        a.state = cleanText(tr("by %1").arg(t.value(QStringLiteral("artist")).toString()));
+        a.state = cleanText(QStringLiteral("by %1").arg(t.value(QStringLiteral("artist")).toString()));
         const QString cover = m_player->artworkUrl();
         a.largeImage = cover.isEmpty() ? kLogo : cover;
         a.largeText.clear();
@@ -73,8 +73,7 @@ void DiscordPresence::update()
         // Discord requires an http(s) URL of at most 512 chars
         const QString url = t.value(QStringLiteral("permalinkUrl")).toString();
         if (url.startsWith(QLatin1StringView("https://")) && url.size() <= 512) {
-            //: button on the Discord status; Discord allows at most 32 characters
-            a.buttonLabel = tr("Listen on SoundCloud");
+            a.buttonLabel = QStringLiteral("Listen on SoundCloud");
             a.buttonUrl = url;
         }
     }
