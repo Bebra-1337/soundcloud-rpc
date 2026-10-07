@@ -1,6 +1,7 @@
 #include "api/SoundCloudApi.h"
 
 #include "api/ClientIdProvider.h"
+#include "api/DiskCache.h"
 #include "api/Entities.h"
 #include "api/WebSession.h"
 
@@ -15,6 +16,8 @@
 SoundCloudApi *SoundCloudApi::s_instance = nullptr;
 
 static const QString kApiBase = QStringLiteral("https://api-v2.soundcloud.com");
+static constexpr qint64 kMemoMs = 10 * 60 * 1000;
+static constexpr int kMemoEntries = 100;
 
 SoundCloudApi::SoundCloudApi(QObject *parent)
     : QObject(parent), m_nam(new QNetworkAccessManager(this))
@@ -47,11 +50,37 @@ void SoundCloudApi::setToken(const QString &token)
     m_token = token;
     m_web->setToken(token);
     m_me.clear();
+    m_meFresh = false;
     m_liked.clear();
+    m_memo.clear();
+    if (m_token.isEmpty())
+        diskcache::remove(QStringLiteral("api"));  // signed out (or the token was rejected): the account's pages go
+    else
+        restoreAccount();  // ready at once with the last known account, so cached pages show (also offline)
     emit meChanged();
     emit readyChanged();
+    emit likesChanged();
     if (!m_token.isEmpty())
         fetchMe();
+}
+
+void SoundCloudApi::restoreAccount()
+{
+    const QVariantMap me = diskcache::read(QStringLiteral("api/me.json")).object().toVariantMap();
+    if (me.value(QStringLiteral("id")).toLongLong() <= 0)
+        return;
+    m_me = me;
+    for (const QJsonValue &v : diskcache::read(QStringLiteral("api/likes.json")).array())
+        m_liked.insert(v.toInteger());
+    ++m_likesRevision;
+}
+
+void SoundCloudApi::saveLikedIds()
+{
+    QJsonArray ids;
+    for (qint64 id : std::as_const(m_liked))
+        ids.append(id);
+    diskcache::write(QStringLiteral("api/likes.json"), QJsonDocument(ids));
 }
 
 void SoundCloudApi::fetchMe()
@@ -60,13 +89,19 @@ void SoundCloudApi::fetchMe()
         const QJsonObject o = doc.object();
         QVariantMap me = sc::userItem(o);
         me[QStringLiteral("username")] = o.value(QLatin1StringView("username")).toString();
+        const bool wasReady = ready();
+        if (userId() && me.value(QStringLiteral("id")).toLongLong() != userId())
+            diskcache::remove(QStringLiteral("api"));  // the cache was another account's
         m_me = me;
+        m_meFresh = true;
+        diskcache::write(QStringLiteral("api/me.json"), QJsonDocument::fromVariant(me));
         emit meChanged();
-        emit readyChanged();
+        if (!wasReady)
+            emit readyChanged();
         fetchLikedIds();
     }, [this](int status, const QString &) {
         if (status != 401 && status != 403)  // offline: try again later; 401 is handled by authRejected
-            QTimer::singleShot(10000, this, [this] { if (signedIn() && m_me.isEmpty()) fetchMe(); });
+            QTimer::singleShot(10000, this, [this] { if (signedIn() && !m_meFresh) fetchMe(); });
     });
 }
 
@@ -236,7 +271,37 @@ void SoundCloudApi::rememberTrack(const QJsonObject &track)
 {
     if (sc::isStub(track) || !track.contains(QLatin1StringView("media")))
         return;
-    m_tracks.insert(track.value(QLatin1StringView("id")).toInteger(), track);
+    m_tracks.insert(track.value(QLatin1StringView("id")).toInteger(), new QJsonObject(track));
+}
+
+QJsonObject SoundCloudApi::cachedTrack(qint64 id) const
+{
+    const QJsonObject *t = m_tracks.object(id);
+    return t ? *t : QJsonObject();
+}
+
+bool SoundCloudApi::fromMemo(const QString &key, const QJSValue &callback)
+{
+    const auto it = m_memo.constFind(key);
+    if (it == m_memo.cend() || it->age.elapsed() > kMemoMs)
+        return false;
+    this->callback(callback, it->result);
+    return true;
+}
+
+void SoundCloudApi::memoize(const QString &key, const QVariant &result)
+{
+    if (m_memo.size() >= kMemoEntries && !m_memo.contains(key)) {
+        auto oldest = m_memo.begin();
+        for (auto it = m_memo.begin(); it != m_memo.end(); ++it) {
+            if (it->age.elapsed() > oldest->age.elapsed())
+                oldest = it;
+        }
+        m_memo.erase(oldest);
+    }
+    Memo &m = m_memo[key];
+    m.result = result;
+    m.age.start();
 }
 
 void SoundCloudApi::fetchTracks(const QList<qint64> &ids, QObject *context, std::function<void()> done)
@@ -309,7 +374,7 @@ void SoundCloudApi::resolveArtwork(const QVariantList &items, QObject *context,
         fetchTracks(trackIds, context, [this, items, byTrack, trackIds, update, settle] {
             for (int k = 0; k < byTrack.size(); ++k) {
                 const QVariantMap m = items.at(byTrack.at(k)).toMap();
-                const QJsonObject t = m_tracks.value(trackIds.at(k));
+                const QJsonObject t = cachedTrack(trackIds.at(k));
                 QString art = t.value(QLatin1StringView("artwork_url")).toString();
                 if (art.isEmpty())
                     art = m.value(QStringLiteral("artworkFallback")).toString();
@@ -360,8 +425,14 @@ void SoundCloudApi::loadHome(const QJSValue &callback)
         int pending = 2;
         QString error;
     };
+    // the last Home first (instant start, offline), then the fresh one replaces it
+    const QJsonDocument cached = diskcache::read(QStringLiteral("api/home.json"));
+    const bool served = !cached.array().isEmpty();
+    if (served)
+        this->callback(callback, cached.array().toVariantList());
+
     auto st = std::make_shared<State>();
-    auto finish = [this, st, callback] {
+    auto finish = [this, st, callback, served] {
         if (--st->pending > 0)
             return;
         auto shelves = std::make_shared<QVariantList>();
@@ -380,13 +451,19 @@ void SoundCloudApi::loadHome(const QJSValue &callback)
             }
         }
         const QString error = shelves->isEmpty() ? st->error : QString();
+        if (shelves->isEmpty() && served)
+            return;  // offline: keep showing the cached shelves
         resolveArtwork(flat, this, [shelves, where](int k, const QVariantMap &item) {
             QVariantMap shelf = (*shelves)[where.at(k).first].toMap();
             QVariantList items = shelf.value(QStringLiteral("items")).toList();
             items[where.at(k).second] = item;
             shelf[QStringLiteral("items")] = items;
             (*shelves)[where.at(k).first] = shelf;
-        }, [this, shelves, callback, error] { this->callback(callback, *shelves, error); });
+        }, [this, shelves, callback, error] {
+            if (!shelves->isEmpty())
+                diskcache::write(QStringLiteral("api/home.json"), QJsonDocument::fromVariant(*shelves));
+            this->callback(callback, *shelves, error);
+        });
     };
 
     QUrlQuery qh;
@@ -429,6 +506,9 @@ void SoundCloudApi::loadPlaylist(const QVariant &idOrUrn, const QJSValue &callba
         this->callback(callback, {}, QStringLiteral("no playlist id"));
         return;
     }
+    const QString memoKey = QStringLiteral("playlist:") + key;
+    if (fromMemo(memoKey, callback))
+        return;
     QString path;
     QUrlQuery q;
     if (key.contains(QLatin1StringView("system-playlists"))) {
@@ -439,30 +519,37 @@ void SoundCloudApi::loadPlaylist(const QVariant &idOrUrn, const QJSValue &callba
         path = QStringLiteral("/playlists/") + key.section(u':', -1);
         q.addQueryItem(QStringLiteral("representation"), QStringLiteral("full"));
     }
-    get(path, q, this, [this, callback](const QJsonDocument &doc) {
+    get(path, q, this, [this, callback, memoKey](const QJsonDocument &doc) {
         const QJsonObject p = doc.object();
         const QJsonArray tracks = p.value(QLatin1StringView("tracks")).toArray();
         QList<qint64> ids;
         for (const QJsonValue &t : tracks)
             ids.append(t.toObject().value(QLatin1StringView("id")).toInteger());
-        fetchTracks(ids, this, [this, p, ids, callback] {
+        fetchTracks(ids, this, [this, p, ids, callback, memoKey] {
             QVariantMap info = sc::playlistItem(p);
             info[QStringLiteral("description")] = p.value(QLatin1StringView("description")).toString();
             QVariantList items;
             for (qint64 id : ids) {
-                const QJsonObject t = m_tracks.value(id);
+                const QJsonObject t = cachedTrack(id);
                 if (!t.isEmpty())
                     items.append(sc::trackItem(t));
             }
-            this->callback(callback, QVariantMap{{QStringLiteral("info"), info}, {QStringLiteral("items"), items}});
+            const QVariantMap result{{QStringLiteral("info"), info}, {QStringLiteral("items"), items}};
+            memoize(memoKey, result);
+            this->callback(callback, result);
         });
     }, [this, callback](int, const QString &err) { this->callback(callback, {}, err); });
 }
 
 void SoundCloudApi::loadUser(const QVariant &id, const QJSValue &callback)
 {
-    get(QStringLiteral("/users/") + id.toString(), {}, this, [this, callback](const QJsonDocument &doc) {
-        this->callback(callback, sc::userItem(doc.object()));
+    const QString memoKey = QStringLiteral("user:") + id.toString();
+    if (fromMemo(memoKey, callback))
+        return;
+    get(QStringLiteral("/users/") + id.toString(), {}, this, [this, callback, memoKey](const QJsonDocument &doc) {
+        const QVariantMap user = sc::userItem(doc.object());
+        memoize(memoKey, user);
+        this->callback(callback, user);
     }, [this, callback](int, const QString &err) { this->callback(callback, {}, err); });
 }
 
@@ -484,6 +571,7 @@ void SoundCloudApi::fetchLikedIds()
         for (const QJsonValue &v : doc.object().value(QLatin1StringView("collection")).toArray())
             m_liked.insert(v.toInteger());
         ++m_likesRevision;
+        saveLikedIds();
         emit likesChanged();
     }, [this](int, const QString &) {
         // fall back to the most recent likes, enough for what is usually on screen
@@ -522,7 +610,8 @@ void SoundCloudApi::setLiked(const QVariant &trackId, bool liked)
         ++m_likesRevision;
         emit likesChanged();
         // the track as lists show it (the full object is cached: it was on screen to be liked)
-        const QJsonObject t = m_tracks.value(id);
+        saveLikedIds();
+        const QJsonObject t = cachedTrack(id);
         emit likeChanged(t.isEmpty() ? QVariantMap{{QStringLiteral("kind"), QStringLiteral("track")}, {QStringLiteral("id"), id}}
                                      : sc::trackItem(t), on);
     };

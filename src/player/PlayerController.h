@@ -9,6 +9,7 @@
 
 class QMediaPlayer;
 class QAudioOutput;
+class QTimer;
 class QJsonObject;
 class SoundCloudApi;
 
@@ -40,6 +41,7 @@ public:
     Q_ENUM(Repeat)
 
     explicit PlayerController(SoundCloudApi *api, QObject *parent = nullptr);
+    ~PlayerController() override;
 
     QMediaPlayer *mediaPlayer() const { return m_player; }
 
@@ -71,6 +73,13 @@ public:
     // cover for Discord / MPRIS: the one the UI shows, else the track's artwork URL
     QString artworkUrl() const;
     bool canGoPrevious() const { return hasTrack(); }
+
+    // The queue and the position survive a restart (session.json in the app's data directory): restored paused,
+    // and nothing is resolved until play. restored() stays true until something is played in this session.
+    void restoreSession();
+    void saveSession() const;
+    void clearSession();  // sign-out: stop, empty the queue, delete the file
+    bool restored() const { return m_restored; }
 
     // start playing items[index]; non-track items are left out of the queue
     Q_INVOKABLE void playList(const QVariantList &items, int index, const QString &context = {});
@@ -141,6 +150,8 @@ private:
     int m_skips = 0;
     bool m_reported = false;
     bool m_hasSource = false;
+    bool m_restored = false;
+    QTimer *m_sessionSave = nullptr;
     QElapsedTimer m_pausedFor;
     QElapsedTimer m_positionClock;
     QElapsedTimer m_seekClock;

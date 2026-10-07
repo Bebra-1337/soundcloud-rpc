@@ -7,6 +7,7 @@
 #endif
 
 #include "api/AuthManager.h"
+#include "api/DiskCache.h"
 #include "api/Entities.h"
 #include "api/SoundCloudApi.h"
 #include "api/WebProfile.h"
@@ -31,6 +32,7 @@
 #include <QSettings>
 #include <QSurfaceFormat>
 #include <QSystemTrayIcon>
+#include <QThreadPool>
 #include <QTimer>
 
 static const std::pair<const char *, const char *> kColorModes[] = {
@@ -76,6 +78,10 @@ static constexpr int kIdleDelayMin = 5;
 static constexpr int kIdleDelayMax = 60;
 static constexpr int kIdleMoveThreshold = 4;  // px the pointer must travel to count as input
 
+static constexpr int kCacheLimitDefault = 300;  // MB
+static constexpr int kCacheLimitMin = 50;
+static constexpr int kCacheLimitMax = 2000;
+
 static const QString kDefaultIdleTheme = QStringLiteral("GlassCard");
 static const std::pair<const char *, const char *> kIdleThemes[] = {
     {"GlassCard", "Glass Card"},     {"BlurCover", "Blur Cover"}, {"Aurora", "Aurora"},
@@ -108,6 +114,10 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
 #endif
 
     connect(m_auth, &AuthManager::tokenChanged, m_api, &SoundCloudApi::setToken);
+    connect(m_auth, &AuthManager::tokenChanged, this, [this](const QString &token) {
+        if (token.isEmpty())
+            m_player->clearSession();  // the queue belongs to the account that signed out
+    });
     connect(m_api, &SoundCloudApi::authRejected, m_auth, &AuthManager::rejectToken);
     connect(m_api, &SoundCloudApi::error, this, &Application::toast);
     connect(m_player, &PlayerController::message, this, &Application::toast);
@@ -129,6 +139,11 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
     m_idleAuto = QSettings().value(QStringLiteral("idle/auto"), true).toBool();
     m_idleDelay = std::clamp(QSettings().value(QStringLiteral("idle/delay"), kIdleDelayDefault).toInt(), kIdleDelayMin,
                              kIdleDelayMax);
+
+    m_cacheLimit = std::clamp(QSettings().value(QStringLiteral("cache/limitMb"), kCacheLimitDefault).toInt(), kCacheLimitMin,
+                              kCacheLimitMax);
+    QmlNetworkFactory::setCacheLimit(qint64(m_cacheLimit) * 1024 * 1024);
+    m_player->restoreSession();
 
     m_idleTimer = new QTimer(this);
     m_idleTimer->setSingleShot(true);
@@ -332,6 +347,57 @@ void Application::setIdleDelay(int seconds)
     QSettings().setValue(QStringLiteral("idle/delay"), seconds);
     restartIdleTimer();
     emit idleDelayChanged();
+}
+
+int Application::cacheLimitMin() const
+{
+    return kCacheLimitMin;
+}
+
+int Application::cacheLimitMax() const
+{
+    return kCacheLimitMax;
+}
+
+void Application::setCacheLimit(int megabytes)
+{
+    megabytes = std::clamp(megabytes, kCacheLimitMin, kCacheLimitMax);
+    if (megabytes == m_cacheLimit)
+        return;
+    m_cacheLimit = megabytes;
+    QSettings().setValue(QStringLiteral("cache/limitMb"), megabytes);
+    QmlNetworkFactory::setCacheLimit(qint64(megabytes) * 1024 * 1024);
+    emit cacheLimitChanged();
+}
+
+void Application::refreshCacheSize()
+{
+    if (m_countingCache)
+        return;
+    m_countingCache = true;
+    // walking a few thousand files: off the GUI thread
+    QPointer<Application> self(this);
+    QThreadPool::globalInstance()->start([self] {
+        const qint64 bytes = diskcache::size();
+        QMetaObject::invokeMethod(qApp, [self, bytes] {
+            if (!self)
+                return;
+            self->m_countingCache = false;
+            self->m_cacheSize = double(bytes);
+            emit self->cacheSizeChanged();
+        });
+    });
+}
+
+void Application::clearCache()
+{
+    QmlNetworkFactory::clearCache();  // queued to the image loader's thread
+    diskcache::remove(QStringLiteral("waveforms"));
+    diskcache::remove(QStringLiteral("api"));
+    m_cacheSize = -1;
+    emit cacheSizeChanged();
+    QTimer::singleShot(400, this, &Application::refreshCacheSize);
+    emit toast(QStringLiteral("Cache cleared"));
 }
 
 void Application::noteActivity()

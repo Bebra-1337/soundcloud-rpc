@@ -38,6 +38,10 @@ class Application : public QObject
     Q_PROPERTY(bool systemPaletteDefault READ systemPaletteDefault CONSTANT)
     Q_PROPERTY(bool idleActive READ idleActive WRITE setIdleActive NOTIFY idleActiveChanged)
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+    Q_PROPERTY(int cacheLimit READ cacheLimit WRITE setCacheLimit NOTIFY cacheLimitChanged)  // MB
+    Q_PROPERTY(int cacheLimitMin READ cacheLimitMin CONSTANT)
+    Q_PROPERTY(int cacheLimitMax READ cacheLimitMax CONSTANT)
+    Q_PROPERTY(double cacheSize READ cacheSize NOTIFY cacheSizeChanged)  // bytes on disk, -1 while counting
     Q_PROPERTY(QVariantList languages READ languages CONSTANT)
 
 public:
@@ -69,6 +73,14 @@ public:
     QString language() const { return m_language; }
     void setLanguage(const QString &language);
     QVariantList languages() const;
+    // disk cache (see DiskCache.h); the limit applies to the covers, which take nearly all of the space
+    int cacheLimit() const { return m_cacheLimit; }
+    void setCacheLimit(int megabytes);
+    int cacheLimitMin() const;
+    int cacheLimitMax() const;
+    double cacheSize() const { return m_cacheSize; }
+    Q_INVOKABLE void refreshCacheSize();
+    Q_INVOKABLE void clearCache();
 
     Q_INVOKABLE void raiseWindow();
     Q_INVOKABLE void toggleWindow();
@@ -96,6 +108,8 @@ signals:
     void idleAutoChanged();
     void idleDelayChanged();
     void languageChanged();
+    void cacheLimitChanged();
+    void cacheSizeChanged();
     void settingsRequested();
     void openItemRequested(const QVariantMap &item);
     void playCollectionRequested(const QVariantMap &item);
@@ -138,6 +152,9 @@ private:
     bool m_idleShownAuto = false;  // opened by the timer: closes again when the music stops
     bool m_wasPlaying = false;
     int m_idleDelay = 30;
+    int m_cacheLimit = 300;
+    double m_cacheSize = -1;
+    bool m_countingCache = false;
     QTimer *m_idleTimer = nullptr;
     QPoint m_activityPos{-1, -1};  // pointer position at the last input, for the movement threshold
     bool m_quitting = false;

@@ -23,6 +23,7 @@ Item {
         listModel: PagedListModel {
             id: feed
             path: "/stream"
+            cached: true
             pageSize: 40
         }
     }

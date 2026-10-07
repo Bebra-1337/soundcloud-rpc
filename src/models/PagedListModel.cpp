@@ -1,9 +1,11 @@
 #include "models/PagedListModel.h"
 
+#include "api/DiskCache.h"
 #include "api/Entities.h"
 #include "api/SoundCloudApi.h"
 
 #include <QJsonArray>
+#include <QJsonObject>
 
 PagedListModel::PagedListModel(QObject *parent) : QAbstractListModel(parent)
 {
@@ -103,7 +105,21 @@ void PagedListModel::reload()
         emit loadingChanged();
         return;
     }
-    request(m_path, true);
+    const QVariantList cached = m_cached ? diskcache::read(cacheFile()).array().toVariantList() : QVariantList();
+    if (!cached.isEmpty()) {
+        beginResetModel();
+        m_items = cached;
+        endResetModel();
+        emit countChanged();
+    }
+    request(m_path, true, !cached.isEmpty());
+}
+
+QString PagedListModel::cacheFile() const
+{
+    const QString query = QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(m_query)).toJson(QJsonDocument::Compact));
+    return QStringLiteral("api/lists/") + diskcache::key(m_path + u'?' + query + u'#' + QString::number(m_pageSize))
+           + QStringLiteral(".json");
 }
 
 void PagedListModel::loadMore()
@@ -211,12 +227,19 @@ void PagedListModel::request(const QString &pathOrUrl, bool first, bool replace)
             m_items += page;
             endInsertRows();
             emit countChanged();
+            const bool save = m_cached && first == 0;
             SoundCloudApi::instance()->resolveArtwork(page, this, [this, generation, first](int i, const QVariantMap &item) {
                 if (generation != m_generation || first + i >= m_items.size())
                     return;
                 m_items[first + i] = item;
                 emit dataChanged(index(first + i), index(first + i));
+            }, [this, generation, save, n = page.size()] {
+                // saved once the covers are resolved, so the cached page needs no requests to show
+                if (save && generation == m_generation)
+                    diskcache::write(cacheFile(), QJsonDocument::fromVariant(m_items.mid(0, n)));
             });
+        } else if (first && m_cached) {
+            diskcache::remove(cacheFile());  // emptied elsewhere: don't show the old rows next time
         }
         m_loading = false;
         m_loaded = true;

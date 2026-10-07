@@ -1,9 +1,15 @@
 #include "player/PlayerController.h"
 
+#include "api/DiskCache.h"
 #include "api/Entities.h"
 #include "api/SoundCloudApi.h"
 
 #include <QAudioOutput>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMediaPlayer>
@@ -75,6 +81,12 @@ static constexpr qint64 kStaleAfterMs = 10 * 60 * 1000;
 static constexpr int kWaveformBars = 120;
 // a resolved stream URL is used for the next track only while it is surely still valid
 static constexpr qint64 kPrefetchValidMs = 5 * 60 * 1000;
+static constexpr int kWaveformsKept = 3000;  // ~1.5 KB each on disk
+
+static QString sessionFile()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + QStringLiteral("/session.json");
+}
 
 PlayerController::PlayerController(SoundCloudApi *api, QObject *parent)
     : QObject(parent), m_api(api), m_player(new QMediaPlayer(this)), m_output(new QAudioOutput(this))
@@ -94,6 +106,21 @@ PlayerController::PlayerController(SoundCloudApi *api, QObject *parent)
     m_output->setVolume(s.value(QStringLiteral("player/volume"), 0.8).toReal());
     m_shuffle = s.value(QStringLiteral("player/shuffle"), false).toBool();
     m_repeat = s.value(QStringLiteral("player/repeat"), int(RepeatOff)).toInt();
+
+    // the session is saved shortly after the queue, the track or the play state changes, and every 30 s while
+    // playing (the position), so even a killed process resumes close to where it was
+    m_sessionSave = new QTimer(this);
+    m_sessionSave->setSingleShot(true);
+    m_sessionSave->setInterval(2000);
+    connect(m_sessionSave, &QTimer::timeout, this, &PlayerController::saveSession);
+    for (auto signal : {&PlayerController::currentChanged, &PlayerController::queueChanged,
+                        &PlayerController::playingChanged})
+        connect(this, signal, m_sessionSave, qOverload<>(&QTimer::start));
+    connect(this, &PlayerController::seeked, m_sessionSave, qOverload<>(&QTimer::start));
+    auto *periodicSave = new QTimer(this);
+    periodicSave->setInterval(30000);
+    connect(periodicSave, &QTimer::timeout, this, [this] { if (playing()) saveSession(); });
+    periodicSave->start();
 
     connect(m_player, &QMediaPlayer::positionChanged, this, [this](qint64 p) {
         if (!m_hasSource || m_resumeAt >= 0)
@@ -178,6 +205,104 @@ PlayerController::PlayerController(SoundCloudApi *api, QObject *parent)
             QTimer::singleShot(1500, this, [this, gen] { if (gen == m_generation) advance(+1, false); });
         }
     });
+}
+
+PlayerController::~PlayerController()
+{
+    saveSession();
+}
+
+void PlayerController::saveSession() const
+{
+    const QString file = sessionFile();
+    if (m_queue.isEmpty() || m_pos < 0 || m_pos >= m_order.size()) {
+        QFile::remove(file);
+        return;
+    }
+    QJsonArray order;
+    for (int i : m_order)
+        order.append(i);
+    const QJsonObject o{
+        {QStringLiteral("queue"), QJsonArray::fromVariantList(m_queue)},
+        {QStringLiteral("order"), order},
+        {QStringLiteral("pos"), m_pos},
+        {QStringLiteral("position"), precisePosition()},
+        {QStringLiteral("duration"), m_duration},
+        {QStringLiteral("context"), m_context},
+    };
+    QDir().mkpath(QFileInfo(file).absolutePath());
+    QSaveFile f(file);
+    if (f.open(QIODevice::WriteOnly)) {
+        f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
+        f.commit();
+    }
+}
+
+void PlayerController::restoreSession()
+{
+    QFile f(sessionFile());
+    if (hasTrack() || !f.open(QIODevice::ReadOnly))
+        return;
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    const QVariantList queue = o.value(QLatin1StringView("queue")).toArray().toVariantList();
+    QList<int> order;
+    for (const QJsonValue &v : o.value(QLatin1StringView("order")).toArray())
+        order.append(v.toInt(-1));
+    const int pos = o.value(QLatin1StringView("pos")).toInt(-1);
+    // a damaged or foreign file: start empty rather than guess
+    QList<int> sorted = order;
+    std::sort(sorted.begin(), sorted.end());
+    QList<int> identity(queue.size());
+    std::iota(identity.begin(), identity.end(), 0);
+    if (queue.isEmpty() || sorted != identity || pos < 0 || pos >= order.size())
+        return;
+
+    m_queue = queue;
+    m_order = order;
+    m_pos = pos;
+    m_context = o.value(QLatin1StringView("context")).toString();
+    m_current = m_queue.at(m_order.at(m_pos)).toMap();
+    m_duration = o.value(QLatin1StringView("duration")).toInteger();
+    if (m_duration <= 0)
+        m_duration = m_current.value(QStringLiteral("durationMs")).toLongLong();
+    m_position = std::clamp<qint64>(o.value(QLatin1StringView("position")).toInteger(), 0, std::max<qint64>(0, m_duration - 500));
+    m_lastReported = m_position;
+    m_reported = true;  // this play was already reported to the history in the session it started in
+    m_restored = true;
+    emit queueChanged();
+    emit currentChanged();
+    emit durationChanged();
+    emit positionChanged();
+    emit playingChanged();
+    fetchWaveform(m_current.value(QStringLiteral("waveformUrl")).toString());
+}
+
+void PlayerController::clearSession()
+{
+    ++m_generation;
+    m_hasSource = false;
+    m_wantPlay = false;
+    m_resumeAt = -1;
+    m_player->stop();
+    m_player->setSource({});
+    m_queue.clear();
+    m_order.clear();
+    m_pos = -1;
+    m_context.clear();
+    m_current.clear();
+    m_position = 0;
+    m_duration = 0;
+    m_waveform.clear();
+    m_restored = false;
+    setLoading(false);
+    updateAudible();
+    emit queueChanged();
+    emit currentChanged();
+    emit positionChanged();
+    emit durationChanged();
+    emit waveformChanged();
+    emit playingChanged();
+    QFile::remove(sessionFile());
 }
 
 bool PlayerController::playing() const
@@ -370,6 +495,7 @@ void PlayerController::setLoading(bool on)
 void PlayerController::startCurrent()
 {
     ++m_generation;
+    m_restored = false;
     m_retries = 0;
     m_reported = false;
     m_resumeAt = -1;
@@ -619,6 +745,7 @@ void PlayerController::play()
     if (!hasTrack())
         return;
     m_wantPlay = true;
+    m_restored = false;
     emit playingChanged();
     if (!m_hasSource) {
         resolveAndPlay(m_position > 0 ? m_position : -1, false);
@@ -680,8 +807,27 @@ void PlayerController::reportPlay()
     m_api->send("POST", QStringLiteral("/me/play-history"), {{QStringLiteral("track_urn"), urn}}, this);
 }
 
+static void pruneWaveforms()
+{
+    QDir dir(diskcache::path(QStringLiteral("waveforms")));
+    const QFileInfoList files = dir.entryInfoList(QDir::Files, QDir::Time);  // newest first
+    for (qsizetype i = kWaveformsKept; i < files.size(); ++i)
+        QFile::remove(files.at(i).absoluteFilePath());
+}
+
 void PlayerController::fetchWaveform(const QString &url)
 {
+    // waveforms never change: kept on disk by track id, downsampled
+    const qint64 id = currentId();
+    const QString cacheFile = QStringLiteral("waveforms/%1.json").arg(id);
+    if (id) {
+        const QJsonArray cached = diskcache::read(cacheFile).array();
+        if (cached.size() == kWaveformBars) {
+            m_waveform = cached.toVariantList();
+            emit waveformChanged();
+            return;
+        }
+    }
     if (url.isEmpty())
         return;
     QString jsonUrl = url;
@@ -692,7 +838,7 @@ void PlayerController::fetchWaveform(const QString &url)
     }
     const int gen = m_generation;
     QNetworkReply *reply = m_api->network()->get(QNetworkRequest(QUrl(jsonUrl)));
-    connect(reply, &QNetworkReply::finished, this, [this, reply, gen] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, gen, id, cacheFile] {
         reply->deleteLater();
         if (gen != m_generation)
             return;
@@ -708,8 +854,18 @@ void PlayerController::fetchWaveform(const QString &url)
             peak = std::max(peak, bars[b]);
         }
         m_waveform.clear();
-        for (double v : std::as_const(bars))
-            m_waveform.append(peak > 0 ? v / peak : 0.0);
+        QJsonArray saved;
+        for (double v : std::as_const(bars)) {
+            const double bar = peak > 0 ? std::round(v / peak * 1000) / 1000 : 0.0;
+            m_waveform.append(bar);
+            saved.append(bar);
+        }
         emit waveformChanged();
+        if (id) {
+            diskcache::write(cacheFile, QJsonDocument(saved));
+            static int written = 0;
+            if (++written % 50 == 0)
+                pruneWaveforms();
+        }
     });
 }

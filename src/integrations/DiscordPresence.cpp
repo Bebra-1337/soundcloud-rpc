@@ -50,7 +50,7 @@ void DiscordPresence::update()
     a.largeText = QStringLiteral("SoundCloud Desktop");
     a.smallImage = kIcon;
 
-    if (!m_player->hasTrack()) {
+    if (!m_player->hasTrack() || m_player->restored()) {  // a queue restored from the last session isn't listening
         a.details = QStringLiteral("Exploring SoundCloud");
         a.state = QStringLiteral("Browsing tracks...");
     } else if (!m_player->playing()) {

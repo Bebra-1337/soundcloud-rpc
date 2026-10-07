@@ -81,7 +81,7 @@ Item {
                         id: list
                         readonly property string sectionKey: sectionLoader.modelData.key
                         contextTitle: sectionLoader.modelData.title
-                        listModel: PagedListModel { path: sectionLoader.modelData.path(); pageSize: 50 }
+                        listModel: PagedListModel { path: sectionLoader.modelData.path(); pageSize: 50; cached: true }
                         // likes and unlikes made here show up at once
                         Connections {
                             target: Api
@@ -102,7 +102,7 @@ Item {
                     ItemGrid {
                         readonly property string sectionKey: sectionLoader.modelData.key
                         contextTitle: sectionLoader.modelData.title
-                        listModel: PagedListModel { path: sectionLoader.modelData.path(); pageSize: 50 }
+                        listModel: PagedListModel { path: sectionLoader.modelData.path(); pageSize: 50; cached: true }
                     }
                 }
             }

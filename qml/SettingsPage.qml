@@ -3,9 +3,17 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import ScBackend
 
-// Settings: colors and language on the left, the idle screen (when it opens, which theme) on the right.
+// Settings in three tabs: General (colors, logo, language), Idle screen (when it opens, which theme) and Storage
+// (the disk cache).
 Item {
     id: root
+
+    property string tab: "general"
+    readonly property var tabs: [
+        { key: "general", label: "General" },
+        { key: "idle", label: "Idle screen" },
+        { key: "storage", label: "Storage" }
+    ]
 
     readonly property var colorHints: ({
         auto: App.systemPaletteDefault ? "Uses your desktop's color scheme." : "SoundCloud's dark colors.",
@@ -15,6 +23,24 @@ Item {
         light: "SoundCloud's light colors."
     })
 
+    function fmtBytes(b) {
+        if (b < 0)
+            return "…"
+        const mb = b / (1024 * 1024)
+        if (mb >= 1024)
+            return (mb / 1024).toFixed(1) + " GB"
+        if (mb >= 10)
+            return Math.round(mb) + " MB"
+        return mb >= 0.1 ? mb.toFixed(1) + " MB" : Math.round(b / 1024) + " KB"
+    }
+    function fmtLimit(mb) {
+        return mb >= 1000 ? (mb / 1000).toFixed(mb % 1000 === 0 ? 0 : 1) + " GB" : mb + " MB"
+    }
+
+    // the size is counted when the tab is shown (it changes while browsing, not while looking at it)
+    readonly property bool storageShown: visible && tab === "storage"
+    onStorageShownChanged: if (storageShown) App.refreshCacheSize()
+
     PageHeader {
         id: header
         page: root
@@ -22,31 +48,40 @@ Item {
         title: "Settings"
     }
 
-    Flickable {
+    ChipBar {
+        id: tabBar
         anchors.top: header.bottom
+        x: Style.gutter
+        chips: root.tabs
+        current: root.tab
+        onPicked: (key) => root.tab = key
+    }
+
+    Flickable {
+        anchors.top: tabBar.bottom
+        anchors.topMargin: 16
         anchors.bottom: parent.bottom
         width: parent.width
-        contentHeight: grid.implicitHeight + Style.gutter
+        contentHeight: pages.height + Style.gutter
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        GridLayout {
-            id: grid
+        Item {
+            id: pages
             x: Style.gutter
             width: parent.width - 2 * Style.gutter
-            columns: width >= 760 ? 2 : 1
-            columnSpacing: 16
-            rowSpacing: 16
+            height: general.visible ? general.implicitHeight : idle.visible ? idle.implicitHeight : storage.implicitHeight
 
-            ColumnLayout {
-                Layout.alignment: Qt.AlignTop
-                Layout.preferredWidth: grid.columns > 1 ? 410 : grid.width
-                Layout.fillWidth: grid.columns === 1
+            Flow {
+                id: general
+                visible: root.tab === "general"
+                width: parent.width
                 spacing: 16
 
                 Card {
+                    width: Math.min(410, general.width)
                     title: "Theme"
                     ChipFlow {
                         chips: App.colorModes
@@ -71,6 +106,7 @@ Item {
                 }
 
                 Card {
+                    width: Math.min(410, general.width)
                     title: "Language"
                     ChipFlow {
                         chips: App.languages
@@ -81,133 +117,227 @@ Item {
                 }
             }
 
-            Card {
-                Layout.alignment: Qt.AlignTop
-                Layout.fillWidth: true
-                title: "Idle screen"
+            ColumnLayout {
+                id: idle
+                visible: root.tab === "idle"
+                width: Math.min(parent.width, 760)
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    Text {
+                Card {
+                    title: "Idle screen"
+
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: "Open by itself while music plays and the app isn't touched"
-                        color: Style.ink
-                        font.pixelSize: 13
-                        elide: Text.ElideRight
+                        spacing: 12
+                        Text {
+                            Layout.fillWidth: true
+                            text: "Open by itself while music plays and the app isn't touched"
+                            color: Style.ink
+                            font.pixelSize: 13
+                            elide: Text.ElideRight
+                        }
+                        Toggle {
+                            checked: App.idleAuto
+                            onToggled: App.idleAuto = checked
+                        }
                     }
-                    Toggle {
-                        checked: App.idleAuto
-                        onToggled: App.idleAuto = checked
-                    }
-                }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    enabled: App.idleAuto
-                    opacity: enabled ? 1 : 0.45
-                    Behavior on opacity { NumberAnimation { duration: 120 } }
-
-                    Text {
-                        text: "After"
-                        color: Style.inkDim
-                        font.pixelSize: 13
-                    }
-                    Slider {
-                        id: delaySlider
+                    RowLayout {
                         Layout.fillWidth: true
-                        from: App.idleDelayMin
-                        to: App.idleDelayMax
-                        stepSize: 1
-                        snapMode: Slider.SnapAlways
-                        value: App.idleDelay
-                        onMoved: App.idleDelay = Math.round(value)
-                        background: Rectangle {
-                            x: delaySlider.leftPadding
-                            y: delaySlider.topPadding + delaySlider.availableHeight / 2 - height / 2
-                            width: delaySlider.availableWidth
-                            height: 4
-                            radius: 2
-                            color: Style.outline
-                            Rectangle {
-                                width: delaySlider.visualPosition * parent.width
-                                height: parent.height
-                                radius: 2
-                                color: Style.accent
-                            }
-                        }
-                        handle: Rectangle {
-                            x: delaySlider.leftPadding + delaySlider.visualPosition * (delaySlider.availableWidth - width)
-                            y: delaySlider.topPadding + delaySlider.availableHeight / 2 - height / 2
-                            width: 14
-                            height: 14
-                            radius: 7
-                            color: Style.accent
-                            scale: delaySlider.pressed ? 1.15 : 1
-                            Behavior on scale { NumberAnimation { duration: 100 } }
-                        }
-                    }
-                    TextField {
-                        id: delayField
-                        Layout.preferredWidth: 52
-                        Layout.preferredHeight: 32
-                        horizontalAlignment: TextInput.AlignHCenter
-                        inputMethodHints: Qt.ImhDigitsOnly
-                        validator: IntValidator { bottom: 0; top: App.idleDelayMax }
-                        color: Style.ink
-                        selectionColor: Style.hover
-                        selectByMouse: true
-                        font.pixelSize: 13
-                        background: Rectangle {
-                            radius: 8
-                            color: Style.raised
-                            border.color: delayField.activeFocus ? Style.inkFaint : "transparent"
-                        }
-                        // not bound: typing must not be overwritten, and a value outside the range snaps back
-                        function sync() { text = App.idleDelay }
-                        Component.onCompleted: sync()
-                        Connections {
-                            target: App
-                            function onIdleDelayChanged() { if (!delayField.activeFocus) delayField.sync() }
-                        }
-                        onEditingFinished: {
-                            App.idleDelay = parseInt(text) || App.idleDelayMin
-                            sync()
-                        }
-                        onActiveFocusChanged: if (!activeFocus) sync()
-                        Keys.onEscapePressed: { sync(); focus = false }
-                    }
-                    Text {
-                        text: "sec"
-                        color: Style.inkDim
-                        font.pixelSize: 13
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 6
-                    Text {
-                        Layout.fillWidth: true
-                        text: "Style"
-                        color: Style.inkDim
-                        font.pixelSize: 12
-                        font.weight: Font.Medium
-                    }
-                    Chip {
-                        text: "Preview"
-                        enabled: Player.hasTrack
+                        spacing: 12
+                        enabled: App.idleAuto
                         opacity: enabled ? 1 : 0.45
-                        onClicked: App.showIdle()
+                        Behavior on opacity { NumberAnimation { duration: 120 } }
+
+                        Text {
+                            text: "After"
+                            color: Style.inkDim
+                            font.pixelSize: 13
+                        }
+                        AccentSlider {
+                            Layout.fillWidth: true
+                            from: App.idleDelayMin
+                            to: App.idleDelayMax
+                            stepSize: 1
+                            value: App.idleDelay
+                            onMoved: App.idleDelay = Math.round(value)
+                        }
+                        TextField {
+                            id: delayField
+                            Layout.preferredWidth: 52
+                            Layout.preferredHeight: 32
+                            horizontalAlignment: TextInput.AlignHCenter
+                            inputMethodHints: Qt.ImhDigitsOnly
+                            validator: IntValidator { bottom: 0; top: App.idleDelayMax }
+                            color: Style.ink
+                            selectionColor: Style.hover
+                            selectByMouse: true
+                            font.pixelSize: 13
+                            background: Rectangle {
+                                radius: 8
+                                color: Style.raised
+                                border.color: delayField.activeFocus ? Style.inkFaint : "transparent"
+                            }
+                            // not bound: typing must not be overwritten, and a value outside the range snaps back
+                            function sync() { text = App.idleDelay }
+                            Component.onCompleted: sync()
+                            Connections {
+                                target: App
+                                function onIdleDelayChanged() { if (!delayField.activeFocus) delayField.sync() }
+                            }
+                            onEditingFinished: {
+                                App.idleDelay = parseInt(text) || App.idleDelayMin
+                                sync()
+                            }
+                            onActiveFocusChanged: if (!activeFocus) sync()
+                            Keys.onEscapePressed: { sync(); focus = false }
+                        }
+                        Text {
+                            text: "sec"
+                            color: Style.inkDim
+                            font.pixelSize: 13
+                        }
                     }
-                }
-                ChipFlow {
-                    chips: App.idleThemes
-                    current: App.idleTheme
-                    onPicked: (key) => App.idleTheme = key
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 6
+                        Text {
+                            Layout.fillWidth: true
+                            text: "Style"
+                            color: Style.inkDim
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                        }
+                        Chip {
+                            text: "Preview"
+                            enabled: Player.hasTrack
+                            opacity: enabled ? 1 : 0.45
+                            onClicked: App.showIdle()
+                        }
+                    }
+                    ChipFlow {
+                        chips: App.idleThemes
+                        current: App.idleTheme
+                        onPicked: (key) => App.idleTheme = key
+                    }
                 }
             }
+
+            ColumnLayout {
+                id: storage
+                visible: root.tab === "storage"
+                width: Math.min(parent.width, 620)
+
+                Card {
+                    title: "Cache"
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: root.fmtBytes(App.cacheSize)
+                                color: Style.ink
+                                font.pixelSize: 24
+                                font.weight: Font.Bold
+                            }
+                            Text {
+                                text: "in use"
+                                color: Style.inkDim
+                                font.pixelSize: 12
+                            }
+                        }
+                        // two clicks: the first asks, the second clears; the question goes away after a few seconds
+                        Chip {
+                            id: clearButton
+                            property bool confirming: false
+                            text: confirming ? "Are you sure?" : "Clear cache"
+                            active: confirming
+                            onClicked: {
+                                if (confirming) {
+                                    confirming = false
+                                    App.clearCache()
+                                } else {
+                                    confirming = true
+                                    confirmTimeout.restart()
+                                }
+                            }
+                            Timer {
+                                id: confirmTimeout
+                                interval: 4000
+                                onTriggered: clearButton.confirming = false
+                            }
+                            Connections {
+                                target: root
+                                function onStorageShownChanged() { clearButton.confirming = false }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 4
+                        spacing: 12
+                        Text {
+                            text: "Limit"
+                            color: Style.inkDim
+                            font.pixelSize: 13
+                        }
+                        AccentSlider {
+                            Layout.fillWidth: true
+                            from: App.cacheLimitMin
+                            to: App.cacheLimitMax
+                            stepSize: 50
+                            value: App.cacheLimit
+                            onMoved: App.cacheLimit = Math.round(value)
+                        }
+                        Text {
+                            Layout.preferredWidth: 60
+                            horizontalAlignment: Text.AlignRight
+                            text: root.fmtLimit(App.cacheLimit)
+                            color: Style.ink
+                            font.pixelSize: 13
+                        }
+                    }
+
+                    Hint {
+                        text: "Covers, waveforms and the last Home, Feed and Library, so they open at once and also "
+                              + "without a connection. When the covers reach the limit, the oldest are removed."
+                    }
+                }
+            }
+        }
+    }
+
+    // The app's slider look: an accent fill on a thin track.
+    component AccentSlider: Slider {
+        id: slider
+        snapMode: Slider.SnapAlways
+        background: Rectangle {
+            x: slider.leftPadding
+            y: slider.topPadding + slider.availableHeight / 2 - height / 2
+            width: slider.availableWidth
+            height: 4
+            radius: 2
+            color: Style.outline
+            Rectangle {
+                width: slider.visualPosition * parent.width
+                height: parent.height
+                radius: 2
+                color: Style.accent
+            }
+        }
+        handle: Rectangle {
+            x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
+            y: slider.topPadding + slider.availableHeight / 2 - height / 2
+            width: 14
+            height: 14
+            radius: 7
+            color: Style.accent
+            scale: slider.pressed ? 1.15 : 1
+            Behavior on scale { NumberAnimation { duration: 100 } }
         }
     }
 

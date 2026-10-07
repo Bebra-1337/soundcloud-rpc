@@ -6,7 +6,9 @@
 #include <QVariantMap>
 
 // A list of items (see sc::item) from one api-v2 collection endpoint, loaded page by page through next_href
-// as the view scrolls (canFetchMore/fetchMore). Also usable as a plain list via setItems().
+// as the view scrolls (canFetchMore/fetchMore). Also usable as a plain list via setItems(). With `cached` the
+// first page is kept on disk (diskcache "api/lists/") and shown at once on the next start, and offline, until the
+// fresh one arrives.
 class PagedListModel : public QAbstractListModel, public QQmlParserStatus
 {
     Q_OBJECT
@@ -19,6 +21,7 @@ class PagedListModel : public QAbstractListModel, public QQmlParserStatus
     Q_PROPERTY(bool hasMore READ hasMore NOTIFY loadingChanged)
     Q_PROPERTY(QString error READ error NOTIFY loadingChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
+    Q_PROPERTY(bool cached MEMBER m_cached)
 
 public:
     enum Roles { ItemRole = Qt::UserRole + 1, KindRole };
@@ -69,6 +72,7 @@ signals:
 private:
     void request(const QString &pathOrUrl, bool first, bool replace = false);
     void maybeLoad();
+    QString cacheFile() const;
 
     QString m_path;
     QVariantMap m_query;
@@ -79,6 +83,7 @@ private:
     bool m_loading = false;
     bool m_loaded = false;
     bool m_complete = false;
+    bool m_cached = false;
     int m_generation = 0;
     QElapsedTimer m_loadedClock;
 };

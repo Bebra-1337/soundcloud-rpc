@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QCache>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJSValue>
 #include <QJsonDocument>
@@ -51,9 +53,10 @@ public:
     void send(const QByteArray &verb, const QString &path, const QJsonObject &body, QObject *context, Ok ok = {},
               Fail fail = {});
 
-    // Full track objects seen in any response, so the player rarely needs to fetch a track again.
+    // Full track objects seen in any response, so the player rarely needs to fetch a track again (the most
+    // recently used few thousand; older ones are fetched again when needed).
     void rememberTrack(const QJsonObject &track);
-    QJsonObject cachedTrack(qint64 id) const { return m_tracks.value(id); }
+    QJsonObject cachedTrack(qint64 id) const;
     void forgetTrack(qint64 id) { m_tracks.remove(id); }
     // Fill the cache for these ids (batches of 50 via /tracks?ids=), then call done.
     void fetchTracks(const QList<qint64> &ids, QObject *context, std::function<void()> done);
@@ -108,6 +111,11 @@ private:
     void fetchLikedIds();
     void verifyToken();
     void callback(const QJSValue &cb, const QVariant &result, const QString &error = {});
+    void restoreAccount();
+    void saveLikedIds();
+    // playlist and user pages opened again within a few minutes are not loaded again
+    bool fromMemo(const QString &key, const QJSValue &callback);
+    void memoize(const QString &key, const QVariant &result);
 
     static SoundCloudApi *s_instance;
     QNetworkAccessManager *m_nam;
@@ -116,8 +124,14 @@ private:
     bool m_writesViaWeb = false;  // DataDome refused a write: send writes from the browser page
     QString m_token;
     QVariantMap m_me;
+    bool m_meFresh = false;  // m_me came from /me in this session, not from the disk cache
     QList<Request> m_waiting;  // queued until a client_id is known
-    QHash<qint64, QJsonObject> m_tracks;
+    QCache<qint64, QJsonObject> m_tracks{3000};
+    struct Memo {
+        QVariant result;
+        QElapsedTimer age;
+    };
+    QHash<QString, Memo> m_memo;
     QSet<qint64> m_liked;
     int m_likesRevision = 0;
 };
