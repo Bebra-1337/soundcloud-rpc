@@ -10,8 +10,8 @@ Item {
         id: header
         page: root
         width: parent.width
-        title: "Queue"
-        subtitle: Player.contextTitle ? "Playing from " + Player.contextTitle : ""
+        title: qsTr("Queue")
+        subtitle: Player.contextTitle ? qsTr("Playing from %1").arg(Player.contextTitle) : ""
     }
 
     ListView {
@@ -40,7 +40,7 @@ Item {
         Text {
             anchors.centerIn: parent
             visible: list.count === 0
-            text: "The queue is empty"
+            text: qsTr("The queue is empty")
             color: Style.inkFaint
             font.pixelSize: 14
         }

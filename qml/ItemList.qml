@@ -10,7 +10,7 @@ ListView {
     property PagedListModel listModel
     property string contextTitle
     property bool numbered: false
-    property string emptyText: "Nothing here yet"
+    property string emptyText: qsTr("Nothing here yet")
 
     model: listModel
     clip: true
@@ -58,7 +58,7 @@ ListView {
     Text {
         anchors.centerIn: parent
         visible: list.listModel !== null && list.listModel.loaded && !list.listModel.loading && list.count === 0
-        text: list.listModel && list.listModel.error ? "Couldn't load (" + list.listModel.error + ")" : list.emptyText
+        text: list.listModel && list.listModel.error ? qsTr("Couldn't load (%1)").arg(list.listModel.error) : list.emptyText
         color: Style.inkFaint
         font.pixelSize: 14
     }

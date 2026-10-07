@@ -9,10 +9,10 @@ Item {
     property string section: "likes"
     readonly property string me: Api.ready ? "/users/" + Api.me.id : ""
     readonly property var sections: [
-        { key: "likes", label: "Likes", grid: false, title: "Liked tracks", path: () => root.me ? root.me + "/track_likes" : "" },
-        { key: "playlists", label: "Playlists & albums", grid: true, title: "Playlists", path: () => Api.ready ? "/me/library/all" : "" },
-        { key: "history", label: "History", grid: false, title: "History", path: () => Api.ready ? "/me/play-history/tracks" : "" },
-        { key: "following", label: "Following", grid: true, title: "Following", path: () => root.me ? root.me + "/followings" : "" }
+        { key: "likes", label: qsTr("Likes"), grid: false, title: qsTr("Liked tracks"), path: () => root.me ? root.me + "/track_likes" : "" },
+        { key: "playlists", label: qsTr("Playlists & albums"), grid: true, title: qsTr("Playlists"), path: () => Api.ready ? "/me/library/all" : "" },
+        { key: "history", label: qsTr("History"), grid: false, title: qsTr("History"), path: () => Api.ready ? "/me/play-history/tracks" : "" },
+        { key: "following", label: qsTr("Following"), grid: true, title: qsTr("Following"), path: () => root.me ? root.me + "/followings" : "" }
     ]
 
     // Lists made elsewhere (likes from the phone, history from the site) change behind our back: a section
@@ -36,7 +36,7 @@ Item {
         id: header
         page: root
         width: parent.width
-        title: "Library"
+        title: qsTr("Library")
         IconButton { icon: "refresh"; tip: "Refresh"; onClicked: root.refresh(root.currentList(), true) }
     }
 

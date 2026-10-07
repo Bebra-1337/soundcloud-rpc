@@ -25,7 +25,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             visible: header.canGoBack
             icon: "back"
-            tip: "Back"
+            tip: qsTr("Back")
             onClicked: header.stack.pop()
         }
         Column {

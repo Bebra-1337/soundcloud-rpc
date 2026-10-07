@@ -199,7 +199,7 @@ PlayerController::PlayerController(SoundCloudApi *api, QObject *parent)
         }
         m_hasSource = false;
         setLoading(false);
-        emit message(QStringLiteral("Playback failed: %1").arg(text));
+        emit message(tr("Playback failed: %1").arg(text));
         if (m_wantPlay) {
             const int gen = m_generation;
             QTimer::singleShot(1500, this, [this, gen] { if (gen == m_generation) advance(+1, false); });
@@ -546,7 +546,7 @@ void PlayerController::resolveAndPlay(qint64 resumeAt, bool fresh)
             return;
         if (t.isEmpty()) {
             setLoading(false);
-            emit message(QStringLiteral("Could not load “%1”").arg(m_current.value(QStringLiteral("title")).toString()));
+            emit message(tr("Could not load “%1”").arg(m_current.value(QStringLiteral("title")).toString()));
             return;
         }
         QVariantMap full = sc::trackItem(t);
@@ -574,7 +574,7 @@ void PlayerController::resolveAndPlay(qint64 resumeAt, bool fresh)
                 return;
             if (url.isEmpty()) {
                 setLoading(false);
-                emit message(QStringLiteral("SoundCloud returned no stream for this track"));
+                emit message(tr("SoundCloud returned no stream for this track"));
                 return;
             }
             // setSource() stops the old source first, and that stop reports LoadedMedia, which would spend
@@ -607,7 +607,7 @@ void PlayerController::resolveAndPlay(qint64 resumeAt, bool fresh)
                     return;
                 }
                 setLoading(false);
-                emit message(QStringLiteral("Could not load the stream (%1)").arg(err));
+                emit message(tr("Could not load the stream (%1)").arg(err));
                 if (m_wantPlay)
                     QTimer::singleShot(1500, this, [this, gen] { if (gen == m_generation) advance(+1, false); });
             });
@@ -649,7 +649,7 @@ void PlayerController::skipUnplayable(const QString &title)
 {
     setLoading(false);
     m_hasSource = false;
-    emit message(QStringLiteral("“%1” can only be played on soundcloud.com").arg(title));
+    emit message(tr("“%1” can only be played on soundcloud.com").arg(title));
     if (++m_skips < m_queue.size()) {
         const int gen = m_generation;
         QTimer::singleShot(700, this, [this, gen] { if (gen == m_generation) advance(+1, false); });
@@ -721,7 +721,8 @@ void PlayerController::autoplayRelated()
             return;
         }
         if (m_context.isEmpty() || !m_context.endsWith(QLatin1StringView("+ related")))
-            m_context = m_context.isEmpty() ? QStringLiteral("Related tracks") : m_context + QStringLiteral(" + related");
+            //: the queue's source after related tracks were added to it; %1 is the original source ("Feed", a playlist)
+            m_context = m_context.isEmpty() ? tr("Related tracks") : tr("%1 + related").arg(m_context);
         emit queueChanged();
         ++m_pos;
         m_wantPlay = true;

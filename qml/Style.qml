@@ -91,12 +91,13 @@ QtObject {
         case "track":
             return item.artist + (item.repostedBy ? "   ↻ " + item.repostedBy : "")
         case "user":
-            return item.followers ? Style.fmtCount(item.followers) + " followers" : (item.artist || "Artist")
+            //: %1 is the count, shortened like 1.2K; the plural form follows the exact number
+            return item.followers ? qsTr("%1 followers", "", item.followers).arg(Style.fmtCount(item.followers)) : (item.artist || qsTr("Artist"))
         case "system-playlist":
         case "station":
             return item.artist || "SoundCloud"
         default:
-            return (item.isAlbum ? "Album" : "Playlist") + (item.artist ? " · " + item.artist : "")
+            return (item.isAlbum ? qsTr("Album") : qsTr("Playlist")) + (item.artist ? " · " + item.artist : "")
         }
     }
 }

@@ -12,10 +12,10 @@ Rectangle {
 
     readonly property int settingsIndex: sections.length  // the gear above the avatar
     readonly property var sections: [
-        { icon: "home", label: "Home" },
-        { icon: "feed", label: "Feed" },
-        { icon: "library", label: "Library" },
-        { icon: "search", label: "Search" }
+        { icon: "home", label: qsTr("Home") },
+        { icon: "feed", label: qsTr("Feed") },
+        { icon: "library", label: qsTr("Library") },
+        { icon: "search", label: qsTr("Search") }
     ]
 
     width: Style.railWidth
@@ -57,7 +57,7 @@ Rectangle {
         anchors.bottom: avatar.top
         anchors.bottomMargin: 14
         icon: "settings"
-        label: "Settings"
+        label: qsTr("Settings")
         active: rail.current === rail.settingsIndex
         onTapped: rail.navigate(rail.settingsIndex)
     }

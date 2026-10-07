@@ -43,7 +43,7 @@ Rectangle {
         Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "note"; size: 40; color: Style.inkFaint }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "Pick something to play"
+            text: qsTr("Pick something to play")
             color: Style.inkDim
             font.pixelSize: 14
         }
@@ -70,7 +70,7 @@ Rectangle {
             HoverHandler { id: coverHover; cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: App.showIdle() }
             ToolTip.visible: coverHover.hovered
-            ToolTip.text: "Idle screen"
+            ToolTip.text: qsTr("Idle screen")
             ToolTip.delay: Style.tipDelay
 
             Rectangle {
@@ -82,7 +82,16 @@ Rectangle {
                 height: 20
                 radius: 5
                 color: Style.withAlpha(Style.bg, 0.8)
-                Text { id: snipLabel; anchors.centerIn: parent; text: "PREVIEW"; color: Style.ink; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 0.8 }
+                Text {
+                    id: snipLabel
+                    anchors.centerIn: parent
+                    //: badge on tracks of which only a 30-second snippet plays; short, capitals
+                    text: qsTr("PREVIEW")
+                    color: Style.ink
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 0.8
+                }
             }
         }
 
@@ -153,14 +162,14 @@ Rectangle {
                 icon: "shuffle"
                 active: Player.shuffle
                 color: Style.inkFaint
-                tip: Player.shuffle ? "Shuffle on" : "Shuffle off"
+                tip: Player.shuffle ? qsTr("Shuffle on") : qsTr("Shuffle off")
                 onClicked: Player.shuffle = !Player.shuffle
             }
             IconButton {
                 anchors.verticalCenter: parent.verticalCenter
                 icon: "prev"
                 color: Style.ink
-                tip: "Previous"
+                tip: qsTr("Previous")
                 onClicked: Player.previous()
             }
             Rectangle {
@@ -191,7 +200,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 icon: "next"
                 color: Style.ink
-                tip: "Next"
+                tip: qsTr("Next")
                 onClicked: Player.next()
             }
             IconButton {
@@ -199,7 +208,7 @@ Rectangle {
                 icon: "repeat"
                 active: Player.repeatMode !== 0
                 color: Style.inkFaint
-                tip: ["Repeat off", "Repeat all", "Repeat one"][Player.repeatMode]
+                tip: [qsTr("Repeat off"), qsTr("Repeat all"), qsTr("Repeat one")][Player.repeatMode]
                 onClicked: Player.cycleRepeat()
                 Text {
                     visible: Player.repeatMode === 2
@@ -227,7 +236,7 @@ Rectangle {
                 icon: "heart"
                 filled: panel.liked
                 active: panel.liked
-                tip: panel.liked ? "Unlike" : "Like"
+                tip: panel.liked ? qsTr("Unlike") : qsTr("Like")
                 onClicked: Api.setLiked(panel.track.id, !panel.liked)
             }
             IconButton {
@@ -235,7 +244,7 @@ Rectangle {
                 size: 32
                 iconSize: 18
                 icon: "queue"
-                tip: "Queue"
+                tip: qsTr("Queue")
                 onClicked: panel.openQueue()
             }
             IconButton {
@@ -243,7 +252,7 @@ Rectangle {
                 size: 32
                 iconSize: 18
                 icon: "screen"
-                tip: "Idle screen"
+                tip: qsTr("Idle screen")
                 onClicked: App.showIdle()
             }
             Item { width: parent.width - 32 * 4 - 2 * 4 - volume.width; height: 1 }
@@ -252,7 +261,7 @@ Rectangle {
                 size: 32
                 iconSize: 18
                 icon: Player.muted || Player.volume === 0 ? "mute" : (Player.volume < 0.5 ? "volumeLow" : "volume")
-                tip: Player.muted ? "Unmute" : "Mute"
+                tip: Player.muted ? qsTr("Unmute") : qsTr("Mute")
                 onClicked: Player.muted = !Player.muted
             }
             Slider {

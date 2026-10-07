@@ -23,8 +23,9 @@ Item {
 
     function greeting() {
         const h = new Date().getHours()
-        const part = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"
-        return Api.me.username ? part + ", " + Api.me.username : part
+        const part = h < 5 ? qsTr("Good night") : h < 12 ? qsTr("Good morning") : h < 18 ? qsTr("Good afternoon") : qsTr("Good evening")
+        //: the greeting above Home: %1 is "Good evening" etc., %2 the user's name
+        return Api.me.username ? qsTr("%1, %2").arg(part).arg(Api.me.username) : part
     }
 
     Component.onCompleted: reload()
@@ -67,7 +68,7 @@ Item {
     Text {
         anchors.centerIn: parent
         visible: !root.loading && root.shelves.length === 0 && Api.ready
-        text: root.error ? "Couldn't load Home (" + root.error + ")" : "Nothing to show yet"
+        text: root.error ? qsTr("Couldn't load Home (%1)").arg(root.error) : qsTr("Nothing to show yet")
         color: Style.inkFaint
         font.pixelSize: 14
     }

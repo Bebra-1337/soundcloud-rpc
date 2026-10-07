@@ -110,7 +110,7 @@ void AuthManager::showWindow()
     if (!m_view) {
         m_view = new QWebEngineView();
         m_view->setAttribute(Qt::WA_DeleteOnClose);
-        m_view->setWindowTitle(QStringLiteral("Sign in to SoundCloud"));
+        m_view->setWindowTitle(tr("Sign in to SoundCloud"));
         m_view->resize(1000, 720);
         m_view->setPage(new QWebEnginePage(m_profile, m_view));
         m_view->setUrl(QUrl(QStringLiteral("https://soundcloud.com/signin")));

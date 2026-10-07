@@ -9,11 +9,11 @@ Item {
     property string kind: "all"
     property string query: ""
     readonly property var kinds: [
-        { key: "all", label: "Everything", path: "/search", grid: false },
-        { key: "tracks", label: "Tracks", path: "/search/tracks", grid: false },
-        { key: "people", label: "People", path: "/search/users", grid: true },
-        { key: "playlists", label: "Playlists", path: "/search/playlists_without_albums", grid: true },
-        { key: "albums", label: "Albums", path: "/search/albums", grid: true }
+        { key: "all", label: qsTr("Everything"), path: "/search", grid: false },
+        { key: "tracks", label: qsTr("Tracks"), path: "/search/tracks", grid: false },
+        { key: "people", label: qsTr("People"), path: "/search/users", grid: true },
+        { key: "playlists", label: qsTr("Playlists"), path: "/search/playlists_without_albums", grid: true },
+        { key: "albums", label: qsTr("Albums"), path: "/search/albums", grid: true }
     ]
     readonly property var currentKind: kinds.find(k => k.key === kind)
     readonly property bool isLink: /^(https?:\/\/)?(on\.|m\.|www\.)?soundcloud\.com\//.test(field.text.trim())
@@ -27,7 +27,7 @@ Item {
         id: header
         page: root
         width: parent.width
-        title: "Search"
+        title: qsTr("Search")
     }
 
     TextField {
@@ -37,7 +37,7 @@ Item {
         width: Math.min(parent.width - 2 * Style.gutter, 560)
         height: 40
         leftPadding: 40
-        placeholderText: "Artists, tracks, playlists… or a soundcloud.com link"
+        placeholderText: qsTr("Artists, tracks, playlists… or a soundcloud.com link")
         color: Style.ink
         placeholderTextColor: Style.inkFaint
         selectionColor: Style.hover
@@ -95,7 +95,7 @@ Item {
     Component {
         id: listComp
         ItemList {
-            contextTitle: "Search: " + root.query
+            contextTitle: qsTr("Search: %1").arg(root.query)
             emptyText: "No results"
             listModel: PagedListModel { path: root.currentKind.path; query: ({ q: root.query }) }
         }
@@ -111,7 +111,7 @@ Item {
     Text {
         anchors.centerIn: parent
         visible: root.query === ""
-        text: root.isLink ? "Press Enter to open the link" : "Find artists, tracks and playlists"
+        text: root.isLink ? qsTr("Press Enter to open the link") : qsTr("Find artists, tracks and playlists")
         color: Style.inkFaint
         font.pixelSize: 14
     }

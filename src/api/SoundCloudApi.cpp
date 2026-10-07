@@ -34,7 +34,7 @@ SoundCloudApi::SoundCloudApi(QObject *parent)
             if (r.context && r.fail)
                 r.fail(0, err);
         }
-        emit error(QStringLiteral("Could not reach soundcloud.com: %1").arg(err));
+        emit error(tr("Could not reach soundcloud.com: %1").arg(err));
     });
 }
 
@@ -437,7 +437,7 @@ void SoundCloudApi::loadHome(const QJSValue &callback)
             return;
         auto shelves = std::make_shared<QVariantList>();
         if (!st->recent.isEmpty())
-            shelves->append(QVariantMap{{QStringLiteral("title"), QStringLiteral("Recently played")},
+            shelves->append(QVariantMap{{QStringLiteral("title"), tr("Recently played")},
                                         {QStringLiteral("items"), st->recent}});
         *shelves += st->selections;
         // all shelves' items in one list, so their covers resolve in one batch
@@ -619,6 +619,6 @@ void SoundCloudApi::setLiked(const QVariant &trackId, bool liked)
     send(liked ? "PUT" : "DELETE", QStringLiteral("/users/%1/track_likes/%2").arg(userId()).arg(id), {}, this, {},
          [this, apply, liked](int, const QString &err) {
              apply(!liked);
-             emit error(QStringLiteral("Could not %1 the track (%2)").arg(liked ? QStringLiteral("like") : QStringLiteral("unlike"), err));
+             emit error((liked ? tr("Could not like the track (%1)") : tr("Could not unlike the track (%1)")).arg(err));
          });
 }

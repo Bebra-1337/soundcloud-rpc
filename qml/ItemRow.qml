@@ -112,13 +112,22 @@ Item {
             radius: 4
             color: "transparent"
             border.color: Style.outline
-            Text { id: previewLabel; anchors.centerIn: parent; text: "PREVIEW"; color: Style.inkDim; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 0.8 }
+            Text {
+                id: previewLabel
+                anchors.centerIn: parent
+                //: badge on tracks of which only a 30-second snippet plays; short, capitals
+                text: qsTr("PREVIEW")
+                color: Style.inkDim
+                font.pixelSize: 9
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.8
+            }
             HoverHandler { id: previewHover }
             ToolTip.visible: previewHover.hovered
             ToolTip.delay: Style.tipDelay
             ToolTip.text: row.item.fullOnlyOnSite
-                          ? "30-second preview here: the full track is DRM-protected and plays in full only on soundcloud.com"
-                          : "30-second preview: SoundCloud gives this account only a snippet (Go+)"
+                          ? qsTr("30-second preview here: the full track is DRM-protected and plays in full only on soundcloud.com")
+                          : qsTr("30-second preview: SoundCloud gives this account only a snippet (Go+)")
         }
         Icon {
             anchors.verticalCenter: parent.verticalCenter
@@ -129,7 +138,7 @@ Item {
             HoverHandler { id: lockHover }
             ToolTip.visible: lockHover.hovered
             ToolTip.delay: Style.tipDelay
-            ToolTip.text: "Only playable on soundcloud.com (DRM)"
+            ToolTip.text: qsTr("Only playable on soundcloud.com (DRM)")
         }
         IconButton {
             anchors.verticalCenter: parent.verticalCenter
@@ -139,7 +148,7 @@ Item {
             icon: "heart"
             filled: row.liked
             active: row.liked
-            tip: row.liked ? "Unlike" : "Like"
+            tip: row.liked ? qsTr("Unlike") : qsTr("Like")
             onClicked: Api.setLiked(row.item.id, !row.liked)
         }
         Text {
@@ -147,7 +156,7 @@ Item {
             width: 52
             horizontalAlignment: Text.AlignRight
             text: row.isTrack ? Style.fmtTime(row.item.durationMs)
-                : (row.item.trackCount ? row.item.trackCount + " tracks" : "")
+                : (row.item.trackCount ? qsTr("%n track(s)", "", row.item.trackCount) : "")
             color: Style.inkFaint
             font.pixelSize: 12
             font.features: { "tnum": 1 }

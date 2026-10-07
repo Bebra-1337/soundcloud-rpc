@@ -185,7 +185,7 @@ void WebSession::showChallenge()
         return;
     m_view = new QWebEngineView();
     m_view->setAttribute(Qt::WA_DeleteOnClose);
-    m_view->setWindowTitle(QStringLiteral("SoundCloud: confirm you're not a robot"));
+    m_view->setWindowTitle(tr("SoundCloud: confirm you're not a robot"));
     m_view->resize(1000, 720);
     m_view->setPage(m_page);
     connect(m_view, &QObject::destroyed, this, [this] {

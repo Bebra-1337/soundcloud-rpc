@@ -35,8 +35,9 @@
 #include <QThreadPool>
 #include <QTimer>
 
+// labels are translated where they are shown (QT_TRANSLATE_NOOP only marks them for lupdate)
 static const std::pair<const char *, const char *> kColorModes[] = {
-    {"auto", "Automatic"}, {"system", "System colors"}, {"dark", "Dark"}, {"light", "Light"}};
+    {"auto", QT_TRANSLATE_NOOP("Application", "Automatic")}, {"system", QT_TRANSLATE_NOOP("Application", "System colors")}, {"dark", QT_TRANSLATE_NOOP("Application", "Dark")}, {"light", QT_TRANSLATE_NOOP("Application", "Light")}};
 
 static bool isKnownColorMode(const QString &mode)
 {
@@ -53,7 +54,7 @@ static bool isKnownLogoStyle(const QString &style)
 }
 
 static const std::pair<const char *, const char *> kLanguages[] = {
-    {"system", "System"}, {"en", "English"}, {"ru", "Русский"}};
+    {"system", QT_TRANSLATE_NOOP("Application", "System")}, {"en", "English"}, {"ru", "Русский"}};  // languages by their own names
 
 static bool isKnownLanguage(const QString &language)
 {
@@ -64,11 +65,16 @@ static bool isKnownLanguage(const QString &language)
     return false;
 }
 
+static QString label(const char *text)
+{
+    return QCoreApplication::translate("Application", text);
+}
+
 static QVariantList keyLabelList(const auto &entries)
 {
     QVariantList out;
-    for (const auto &[key, label] : entries)
-        out.append(QVariantMap{{QStringLiteral("key"), QLatin1StringView(key)}, {QStringLiteral("label"), QString::fromUtf8(label)}});
+    for (const auto &[key, text] : entries)
+        out.append(QVariantMap{{QStringLiteral("key"), QLatin1StringView(key)}, {QStringLiteral("label"), label(text)}});
     return out;
 }
 
@@ -84,11 +90,11 @@ static constexpr int kCacheLimitMax = 2000;
 
 static const QString kDefaultIdleTheme = QStringLiteral("GlassCard");
 static const std::pair<const char *, const char *> kIdleThemes[] = {
-    {"GlassCard", "Glass Card"},     {"BlurCover", "Blur Cover"}, {"Aurora", "Aurora"},
-    {"Vinyl", "Vinyl"},              {"Cassette", "Cassette"},    {"Particles", "Particles"},
-    {"Equalizer", "Equalizer"},      {"Stereo", "Stereo Mirror"}, {"Polaroid", "Polaroid"},
-    {"MinimalClock", "Minimal Clock"}, {"Typography", "Typography"}, {"Neon", "Neon"},
-    {"AlbumWall", "Album Wall"},     {"Orbit", "Orbit"},          {"Starfield", "Starfield"},
+    {"GlassCard", QT_TRANSLATE_NOOP("Application", "Glass Card")},       {"BlurCover", QT_TRANSLATE_NOOP("Application", "Blur Cover")},  {"Aurora", QT_TRANSLATE_NOOP("Application", "Aurora")},
+    {"Vinyl", QT_TRANSLATE_NOOP("Application", "Vinyl")},                {"Cassette", QT_TRANSLATE_NOOP("Application", "Cassette")},     {"Particles", QT_TRANSLATE_NOOP("Application", "Particles")},
+    {"Equalizer", QT_TRANSLATE_NOOP("Application", "Equalizer")},        {"Stereo", QT_TRANSLATE_NOOP("Application", "Stereo Mirror")},   {"Polaroid", QT_TRANSLATE_NOOP("Application", "Polaroid")},
+    {"MinimalClock", QT_TRANSLATE_NOOP("Application", "Minimal Clock")}, {"Typography", QT_TRANSLATE_NOOP("Application", "Typography")}, {"Neon", QT_TRANSLATE_NOOP("Application", "Neon")},
+    {"AlbumWall", QT_TRANSLATE_NOOP("Application", "Album Wall")},       {"Orbit", QT_TRANSLATE_NOOP("Application", "Orbit")},        {"Starfield", QT_TRANSLATE_NOOP("Application", "Starfield")},
 };
 
 static bool isKnownTheme(const QString &key)
@@ -397,7 +403,7 @@ void Application::clearCache()
     m_cacheSize = -1;
     emit cacheSizeChanged();
     QTimer::singleShot(400, this, &Application::refreshCacheSize);
-    emit toast(QStringLiteral("Cache cleared"));
+    emit toast(tr("Cache cleared"));
 }
 
 void Application::noteActivity()
@@ -486,9 +492,9 @@ void Application::copyTrackLink()
     if (url.isEmpty())
         return;
     QGuiApplication::clipboard()->setText(url);
-    emit toast(QStringLiteral("Link copied"));
+    emit toast(tr("Link copied"));
     if (m_tray && (!m_window || !m_window->isVisible()))
-        m_tray->showMessage(QStringLiteral("SoundCloud Desktop"), QStringLiteral("Link copied to clipboard: %1").arg(url),
+        m_tray->showMessage(QStringLiteral("SoundCloud Desktop"), tr("Link copied to clipboard: %1").arg(url),
                             QSystemTrayIcon::Information, 2000);
 }
 
@@ -497,7 +503,7 @@ void Application::copyLink(const QString &url)
     if (url.isEmpty())
         return;
     QGuiApplication::clipboard()->setText(url);
-    emit toast(QStringLiteral("Link copied"));
+    emit toast(tr("Link copied"));
 }
 
 void Application::openExternal(const QString &url)
@@ -509,7 +515,7 @@ void Application::openSoundCloudUrl(const QString &url)
 {
     const QUrl u(url.trimmed());
     if (!u.host().endsWith(QLatin1StringView("soundcloud.com")) && u.host() != QLatin1StringView("on.soundcloud.com")) {
-        emit toast(QStringLiteral("Not a SoundCloud link"));
+        emit toast(tr("Not a SoundCloud link"));
         return;
     }
     if (!m_api->ready()) {
@@ -524,7 +530,7 @@ void Application::openSoundCloudUrl(const QString &url)
             return;
         raiseWindow();
         emit openItemRequested(item);
-    }, [this](int, const QString &err) { emit toast(QStringLiteral("Could not open the link (%1)").arg(err)); });
+    }, [this](int, const QString &err) { emit toast(tr("Could not open the link (%1)").arg(err)); });
 }
 
 bool Application::isGone(const QString &url) const
@@ -552,18 +558,18 @@ void Application::createTray()
     m_tray->setToolTip(QStringLiteral("SoundCloud Desktop"));
 
     m_trayMenu = new QMenu();
-    m_trayMenu->addAction(QStringLiteral("Play / Pause"), m_player, &PlayerController::togglePlay);
-    m_trayMenu->addAction(QStringLiteral("Next"), m_player, &PlayerController::next);
-    m_trayMenu->addAction(QStringLiteral("Previous"), m_player, &PlayerController::previous);
-    m_trayMenu->addAction(QStringLiteral("Copy Track Link"), this, &Application::copyTrackLink);
-    m_trayMenu->addAction(QStringLiteral("Show / Hide Window"), this, &Application::toggleWindow);
-    m_trayMenu->addAction(QStringLiteral("Settings…"), this, &Application::openSettings);
+    m_trayMenu->addAction(tr("Play / Pause"), m_player, &PlayerController::togglePlay);
+    m_trayMenu->addAction(tr("Next"), m_player, &PlayerController::next);
+    m_trayMenu->addAction(tr("Previous"), m_player, &PlayerController::previous);
+    m_trayMenu->addAction(tr("Copy Track Link"), this, &Application::copyTrackLink);
+    m_trayMenu->addAction(tr("Show / Hide Window"), this, &Application::toggleWindow);
+    m_trayMenu->addAction(tr("Settings…"), this, &Application::openSettings);
     m_trayMenu->addSeparator();
     createAppearanceMenu(m_trayMenu);
     createIdleMenu(m_trayMenu);
     m_trayMenu->addSeparator();
-    m_trayMenu->addAction(QStringLiteral("Sign Out"), m_auth, &AuthManager::signOut);
-    m_trayMenu->addAction(QStringLiteral("Quit"), this, &Application::quit);
+    m_trayMenu->addAction(tr("Sign Out"), m_auth, &AuthManager::signOut);
+    m_trayMenu->addAction(tr("Quit"), this, &Application::quit);
 
     m_tray->setContextMenu(m_trayMenu);
     connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
@@ -576,10 +582,10 @@ void Application::createTray()
 
 void Application::createAppearanceMenu(QMenu *menu)
 {
-    QMenu *appearance = menu->addMenu(QStringLiteral("Appearance"));
+    QMenu *appearance = menu->addMenu(tr("Appearance"));
     m_colorGroup = new QActionGroup(this);
-    for (const auto &[key, label] : kColorModes) {
-        QAction *a = appearance->addAction(QLatin1StringView(label));
+    for (const auto &[key, text] : kColorModes) {
+        QAction *a = appearance->addAction(::label(text));
         a->setCheckable(true);
         a->setData(QLatin1StringView(key));
         a->setChecked(m_colorMode == QLatin1StringView(key));
@@ -590,12 +596,12 @@ void Application::createAppearanceMenu(QMenu *menu)
 
 void Application::createIdleMenu(QMenu *menu)
 {
-    QMenu *idle = menu->addMenu(QStringLiteral("Idle Screen"));
-    idle->addAction(QStringLiteral("Show Idle Screen"), this, &Application::showIdle);
+    QMenu *idle = menu->addMenu(tr("Idle Screen"));
+    idle->addAction(tr("Show Idle Screen"), this, &Application::showIdle);
     idle->addSeparator();
     m_themeGroup = new QActionGroup(this);
-    for (const auto &[key, label] : kIdleThemes) {
-        QAction *a = idle->addAction(QLatin1StringView(label));
+    for (const auto &[key, text] : kIdleThemes) {
+        QAction *a = idle->addAction(::label(text));
         a->setCheckable(true);
         a->setData(QLatin1StringView(key));
         a->setChecked(m_idleTheme == QLatin1StringView(key));

@@ -11,8 +11,8 @@ Item {
     property bool loading: true
     property string error: ""
 
-    readonly property string kindLabel: item.kind === "system-playlist" || item.kind === "station" ? "Made for you"
-                                        : info.isAlbum ? "Album" : "Playlist"
+    readonly property string kindLabel: item.kind === "system-playlist" || item.kind === "station" ? qsTr("Made for you")
+                                        : info.isAlbum ? qsTr("Album") : qsTr("Playlist")
 
     Component.onCompleted: {
         Api.loadPlaylist(item.urn || item.id, (result, err) => {
@@ -73,7 +73,7 @@ Item {
             }
         }
         Text {
-            text: (tracks.count || root.info.trackCount || 0) + " tracks"
+            text: qsTr("%n track(s)", "", tracks.count || root.info.trackCount || 0)
                   + (root.info.durationMs > 0 ? " · " + Style.fmtTime(root.info.durationMs) : "")
             color: Style.inkFaint
             font.pixelSize: 12
@@ -99,7 +99,7 @@ Item {
             IconButton {
                 anchors.verticalCenter: parent.verticalCenter
                 icon: "shuffle"
-                tip: "Shuffle play"
+                tip: qsTr("Shuffle play")
                 onClicked: if (tracks.count > 0) {
                     Player.shuffle = true
                     Player.playList(tracks.items(), Math.floor(Math.random() * tracks.count), root.info.title)
@@ -109,7 +109,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !!root.info.permalinkUrl
                 icon: "external"
-                tip: "Open on soundcloud.com"
+                tip: qsTr("Open on soundcloud.com")
                 onClicked: App.openExternal(root.info.permalinkUrl)
             }
         }
@@ -125,7 +125,7 @@ Item {
         numbered: true
         contextTitle: root.info.title || ""
         listModel: tracks
-        emptyText: root.error ? "Couldn't load (" + root.error + ")" : "This playlist is empty"
+        emptyText: root.error ? qsTr("Couldn't load (%1)").arg(root.error) : qsTr("This playlist is empty")
     }
     Spinner {
         anchors.centerIn: parent

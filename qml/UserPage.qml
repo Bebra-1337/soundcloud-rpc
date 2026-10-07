@@ -13,11 +13,11 @@ Item {
 
     readonly property string base: "/users/" + item.id
     readonly property var sections: [
-        { key: "tracks", label: "Tracks", grid: false, path: base + "/tracks" },
-        { key: "popular", label: "Popular", grid: false, path: base + "/toptracks" },
-        { key: "playlists", label: "Playlists", grid: true, path: base + "/playlists_without_albums" },
-        { key: "albums", label: "Albums", grid: true, path: base + "/albums" },
-        { key: "likes", label: "Likes", grid: false, path: base + "/likes" }
+        { key: "tracks", label: qsTr("Tracks"), grid: false, path: base + "/tracks" },
+        { key: "popular", label: qsTr("Popular"), grid: false, path: base + "/toptracks" },
+        { key: "playlists", label: qsTr("Playlists"), grid: true, path: base + "/playlists_without_albums" },
+        { key: "albums", label: qsTr("Albums"), grid: true, path: base + "/albums" },
+        { key: "likes", label: qsTr("Likes"), grid: false, path: base + "/likes" }
     ]
 
     Component.onCompleted: Api.loadUser(item.id, (result) => { if (result) root.info = result })
@@ -27,11 +27,12 @@ Item {
         page: root
         width: parent.width
         title: root.info.title || ""
-        subtitle: root.info.followers ? Style.fmtCount(root.info.followers) + " followers" : ""
+        //: %1 is the count, shortened like 1.2K; the plural form follows the exact number
+        subtitle: root.info.followers ? qsTr("%1 followers", "", root.info.followers).arg(Style.fmtCount(root.info.followers)) : ""
         IconButton {
             visible: !!root.info.permalinkUrl
             icon: "external"
-            tip: "Open on soundcloud.com"
+            tip: qsTr("Open on soundcloud.com")
             onClicked: App.openExternal(root.info.permalinkUrl)
         }
     }
@@ -59,7 +60,7 @@ Item {
         Text {
             width: parent.width
             visible: root.info.trackCount > 0
-            text: root.info.trackCount + " tracks"
+            text: qsTr("%n track(s)", "", root.info.trackCount)
             color: Style.inkFaint
             font.pixelSize: 12
         }

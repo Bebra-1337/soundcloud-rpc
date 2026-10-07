@@ -8,7 +8,7 @@ GridView {
 
     property PagedListModel listModel
     property string contextTitle
-    property string emptyText: "Nothing here yet"
+    property string emptyText: qsTr("Nothing here yet")
 
     readonly property int columns: Math.max(1, Math.floor((width - leftMargin - rightMargin) / 172))
 
@@ -64,7 +64,7 @@ GridView {
     Text {
         anchors.centerIn: parent
         visible: grid.listModel !== null && grid.listModel.loaded && !grid.listModel.loading && grid.count === 0
-        text: grid.listModel && grid.listModel.error ? "Couldn't load (" + grid.listModel.error + ")" : grid.emptyText
+        text: grid.listModel && grid.listModel.error ? qsTr("Couldn't load (%1)").arg(grid.listModel.error) : grid.emptyText
         color: Style.inkFaint
         font.pixelSize: 14
     }

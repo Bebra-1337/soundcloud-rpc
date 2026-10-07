@@ -36,7 +36,7 @@ Item {
         }
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: np.playing ? "Now playing" : "Paused"
+            text: np.playing ? qsTr("Now playing") : qsTr("Paused")
             color: np.color
             font.pixelSize: np.unit * 2.3
             font.capitalization: Font.AllUppercase

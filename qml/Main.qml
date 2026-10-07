@@ -79,7 +79,7 @@ ApplicationWindow {
             if (result && result.items.length > 0)
                 Player.playList(result.items, 0, result.info.title)
             else
-                toast.show("Couldn't load " + (item.title || "the playlist"))
+                toast.show(item.title ? qsTr("Couldn't load %1").arg(item.title) : qsTr("Couldn't load the playlist"))
         })
     }
 

@@ -29,7 +29,7 @@ Column {
     }
     Text {
         width: info.width
-        text: info.title || "Nothing playing"
+        text: info.title || qsTr("Nothing playing")
         color: info.ink
         font.pixelSize: info.unit * info.titleSize
         font.weight: Font.DemiBold

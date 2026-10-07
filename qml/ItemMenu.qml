@@ -26,26 +26,26 @@ Menu {
     }
 
     Entry {
-        text: menu.isTrack ? "Play" : "Open"
+        text: menu.isTrack ? qsTr("Play") : qsTr("Open")
         onTriggered: menu.isTrack ? Player.playTrack(menu.item) : App.openItem(menu.item)
     }
     Entry {
-        text: "Play next"
+        text: qsTr("Play next")
         enabled: menu.isTrack && menu.item.playable !== false
         onTriggered: Player.playNext(menu.item)
     }
     Entry {
-        text: "Add to queue"
+        text: qsTr("Add to queue")
         enabled: menu.isTrack && menu.item.playable !== false
         onTriggered: Player.enqueue(menu.item)
     }
     Entry {
-        text: Api.likesRevision >= 0 && Api.isLiked(menu.item.id) ? "Unlike" : "Like"
+        text: Api.likesRevision >= 0 && Api.isLiked(menu.item.id) ? qsTr("Unlike") : qsTr("Like")
         enabled: menu.isTrack
         onTriggered: Api.setLiked(menu.item.id, !Api.isLiked(menu.item.id))
     }
     Entry {
-        text: "Go to artist"
+        text: qsTr("Go to artist")
         enabled: menu.item.userId > 0
         onTriggered: App.openItem({ kind: "user", id: menu.item.userId, title: menu.item.artist })
     }
@@ -58,12 +58,12 @@ Menu {
         }
     }
     Entry {
-        text: "Copy link"
+        text: qsTr("Copy link")
         enabled: !!menu.item.permalinkUrl
         onTriggered: App.copyLink(menu.item.permalinkUrl)
     }
     Entry {
-        text: "Open on soundcloud.com"
+        text: qsTr("Open on soundcloud.com")
         enabled: !!menu.item.permalinkUrl
         onTriggered: App.openExternal(menu.item.permalinkUrl)
     }

@@ -10,17 +10,17 @@ Item {
 
     property string tab: "general"
     readonly property var tabs: [
-        { key: "general", label: "General" },
-        { key: "idle", label: "Idle screen" },
-        { key: "storage", label: "Storage" }
+        { key: "general", label: qsTr("General") },
+        { key: "idle", label: qsTr("Idle screen") },
+        { key: "storage", label: qsTr("Storage") }
     ]
 
     readonly property var colorHints: ({
-        auto: App.systemPaletteDefault ? "Uses your desktop's color scheme." : "SoundCloud's dark colors.",
-        system: App.systemPaletteDefault ? "Your desktop's color scheme (qt6ct), updated live."
-                                         : "The Qt color scheme of the system.",
-        dark: "SoundCloud's dark colors.",
-        light: "SoundCloud's light colors."
+        auto: App.systemPaletteDefault ? qsTr("Uses your desktop's color scheme.") : qsTr("SoundCloud's dark colors."),
+        system: App.systemPaletteDefault ? qsTr("Your desktop's color scheme (qt6ct), updated live.")
+                                         : qsTr("The Qt color scheme of the system."),
+        dark: qsTr("SoundCloud's dark colors."),
+        light: qsTr("SoundCloud's light colors.")
     })
 
     function fmtBytes(b) {
@@ -28,13 +28,13 @@ Item {
             return "…"
         const mb = b / (1024 * 1024)
         if (mb >= 1024)
-            return (mb / 1024).toFixed(1) + " GB"
+            return qsTr("%1 GB").arg((mb / 1024).toFixed(1))
         if (mb >= 10)
-            return Math.round(mb) + " MB"
-        return mb >= 0.1 ? mb.toFixed(1) + " MB" : Math.round(b / 1024) + " KB"
+            return qsTr("%1 MB").arg(Math.round(mb))
+        return mb >= 0.1 ? qsTr("%1 MB").arg(mb.toFixed(1)) : qsTr("%1 KB").arg(Math.round(b / 1024))
     }
     function fmtLimit(mb) {
-        return mb >= 1000 ? (mb / 1000).toFixed(mb % 1000 === 0 ? 0 : 1) + " GB" : mb + " MB"
+        return mb >= 1000 ? qsTr("%1 GB").arg((mb / 1000).toFixed(mb % 1000 === 0 ? 0 : 1)) : qsTr("%1 MB").arg(mb)
     }
 
     // the size is counted when the tab is shown (it changes while browsing, not while looking at it)
@@ -45,7 +45,7 @@ Item {
         id: header
         page: root
         width: parent.width
-        title: "Settings"
+        title: qsTr("Settings")
     }
 
     ChipBar {
@@ -82,7 +82,7 @@ Item {
 
                 Card {
                     width: Math.min(410, general.width)
-                    title: "Theme"
+                    title: qsTr("Theme")
                     ChipFlow {
                         chips: App.colorModes
                         current: App.colorMode
@@ -92,28 +92,28 @@ Item {
 
                     Text {
                         Layout.topMargin: 4
-                        text: "Logo"
+                        text: qsTr("Logo")
                         color: Style.inkDim
                         font.pixelSize: 12
                         font.weight: Font.Medium
                     }
                     Row {
                         spacing: 8
-                        LogoTile { key: "auto"; label: "Automatic" }
-                        LogoTile { key: "white"; label: "White" }
-                        LogoTile { key: "black"; label: "Black" }
+                        LogoTile { key: "auto"; label: qsTr("Automatic") }
+                        LogoTile { key: "white"; label: qsTr("White") }
+                        LogoTile { key: "black"; label: qsTr("Black") }
                     }
                 }
 
                 Card {
                     width: Math.min(410, general.width)
-                    title: "Language"
+                    title: qsTr("Language")
                     ChipFlow {
                         chips: App.languages
                         current: App.language
                         onPicked: (key) => App.language = key
                     }
-                    Hint { text: "Translations aren't ready yet: the interface stays in English for now." }
+                    Hint { text: qsTr("System uses your desktop's language, or English when there is no translation for it.") }
                 }
             }
 
@@ -123,14 +123,14 @@ Item {
                 width: Math.min(parent.width, 760)
 
                 Card {
-                    title: "Idle screen"
+                    title: qsTr("Idle screen")
 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 12
                         Text {
                             Layout.fillWidth: true
-                            text: "Open by itself while music plays and the app isn't touched"
+                            text: qsTr("Open by itself while music plays and the app isn't touched")
                             color: Style.ink
                             font.pixelSize: 13
                             elide: Text.ElideRight
@@ -149,7 +149,8 @@ Item {
                         Behavior on opacity { NumberAnimation { duration: 120 } }
 
                         Text {
-                            text: "After"
+                            //: "After [slider] 30 sec": the delay before the idle screen opens
+                            text: qsTr("After")
                             color: Style.inkDim
                             font.pixelSize: 13
                         }
@@ -192,7 +193,8 @@ Item {
                             Keys.onEscapePressed: { sync(); focus = false }
                         }
                         Text {
-                            text: "sec"
+                            //: seconds, after the delay field
+                            text: qsTr("sec")
                             color: Style.inkDim
                             font.pixelSize: 13
                         }
@@ -203,13 +205,14 @@ Item {
                         Layout.topMargin: 6
                         Text {
                             Layout.fillWidth: true
-                            text: "Style"
+                            //: heading above the idle screen's themes
+                            text: qsTr("Style")
                             color: Style.inkDim
                             font.pixelSize: 12
                             font.weight: Font.Medium
                         }
                         Chip {
-                            text: "Preview"
+                            text: qsTr("Preview")
                             enabled: Player.hasTrack
                             opacity: enabled ? 1 : 0.45
                             onClicked: App.showIdle()
@@ -229,7 +232,7 @@ Item {
                 width: Math.min(parent.width, 620)
 
                 Card {
-                    title: "Cache"
+                    title: qsTr("Cache")
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -244,7 +247,8 @@ Item {
                                 font.weight: Font.Bold
                             }
                             Text {
-                                text: "in use"
+                                //: under the cache size, e.g. "120 MB / in use"
+                                text: qsTr("in use")
                                 color: Style.inkDim
                                 font.pixelSize: 12
                             }
@@ -253,7 +257,7 @@ Item {
                         Chip {
                             id: clearButton
                             property bool confirming: false
-                            text: confirming ? "Are you sure?" : "Clear cache"
+                            text: confirming ? qsTr("Are you sure?") : qsTr("Clear cache")
                             active: confirming
                             onClicked: {
                                 if (confirming) {
@@ -281,7 +285,8 @@ Item {
                         Layout.topMargin: 4
                         spacing: 12
                         Text {
-                            text: "Limit"
+                            //: the cache size limit slider
+                            text: qsTr("Limit")
                             color: Style.inkDim
                             font.pixelSize: 13
                         }
@@ -303,8 +308,7 @@ Item {
                     }
 
                     Hint {
-                        text: "Covers, waveforms and the last Home, Feed and Library, so they open at once and also "
-                              + "without a connection. When the covers reach the limit, the oldest are removed."
+                        text: qsTr("Covers, waveforms and the last Home, Feed and Library, so they open at once and also without a connection. When the covers reach the limit, the oldest are removed.")
                     }
                 }
             }

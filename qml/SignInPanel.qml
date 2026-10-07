@@ -25,7 +25,7 @@ Rectangle {
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: Api.signedIn ? "Connecting to SoundCloud…" : "Sign in to SoundCloud"
+            text: Api.signedIn ? qsTr("Connecting to SoundCloud…") : qsTr("Sign in to SoundCloud")
             color: Style.ink
             font.pixelSize: 22
             font.weight: Font.Bold
@@ -36,8 +36,8 @@ Rectangle {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             text: Auth.signingIn
-                  ? "Finish signing in in the SoundCloud window. It closes by itself once you're in."
-                  : "Use your own SoundCloud account, the same as on soundcloud.com. The sign-in page opens in a separate window, once."
+                  ? qsTr("Finish signing in in the SoundCloud window. It closes by itself once you're in.")
+                  : qsTr("Use your own SoundCloud account, the same as on soundcloud.com. The sign-in page opens in a separate window, once.")
             color: Style.inkDim
             font.pixelSize: 13
             lineHeight: 1.2
@@ -53,7 +53,7 @@ Rectangle {
             Text {
                 id: signLabel
                 anchors.centerIn: parent
-                text: Auth.signingIn ? "Show sign-in window" : "Sign in"
+                text: Auth.signingIn ? qsTr("Show sign-in window") : qsTr("Sign in")
                 color: Style.onAccent
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
