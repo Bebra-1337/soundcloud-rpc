@@ -5,8 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS
-    Core Gui Widgets Network DBus Qml Quick QuickControls2 Multimedia WebEngineCore WebEngineWidgets)
+set(qt_components Core Gui Widgets Network Qml Quick QuickControls2 Multimedia WebEngineCore WebEngineWidgets)
+# MPRIS (D-Bus) and the qt6ct theme follower exist on Linux only
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND qt_components DBus)
+endif()
+find_package(Qt6 6.8 REQUIRED COMPONENTS ${qt_components})
 qt_standard_project_setup(REQUIRES 6.8)
 
 # Idle-screen themes: a static QML module shared by the app and the theme preview.
@@ -15,7 +19,6 @@ add_subdirectory(qml/idle)
 qt_add_executable(soundcloud-rpc
     src/main.cpp
     src/app/Application.h src/app/Application.cpp
-    src/app/ThemeWatcher.h src/app/ThemeWatcher.cpp
     src/api/ClientIdProvider.h src/api/ClientIdProvider.cpp
     src/api/SoundCloudApi.h src/api/SoundCloudApi.cpp
     src/api/AuthManager.h src/api/AuthManager.cpp
@@ -27,8 +30,12 @@ qt_add_executable(soundcloud-rpc
     src/player/AudioAnalyser.h src/player/AudioAnalyser.cpp
     src/integrations/DiscordIpc.h src/integrations/DiscordIpc.cpp
     src/integrations/DiscordPresence.h src/integrations/DiscordPresence.cpp
-    src/integrations/Mpris.h src/integrations/Mpris.cpp
 )
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(soundcloud-rpc PRIVATE
+        src/app/ThemeWatcher.h src/app/ThemeWatcher.cpp
+        src/integrations/Mpris.h src/integrations/Mpris.cpp)
+endif()
 target_include_directories(soundcloud-rpc PRIVATE src)
 target_compile_definitions(soundcloud-rpc PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
 
@@ -52,9 +59,12 @@ qt_add_qml_module(soundcloud-rpc
 )
 
 target_link_libraries(soundcloud-rpc PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::DBus Qt6::Qml Qt6::Quick Qt6::QuickControls2
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2
     Qt6::Multimedia Qt6::WebEngineCore Qt6::WebEngineWidgets
     scidleplugin)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(soundcloud-rpc PRIVATE Qt6::DBus)
+endif()
 
 # Standalone gallery of the idle themes with fake data (replaces qml/preview.py).
 qt_add_executable(soundcloud-rpc-preview src/preview_main.cpp)

@@ -10,7 +10,9 @@
 #include <QUuid>
 #include <QtEndian>
 
+#ifdef Q_OS_UNIX
 #include <unistd.h>
+#endif
 
 static constexpr int kRateLimitCount = 4;
 static constexpr qint64 kRateLimitWindowMs = 20000;
@@ -106,18 +108,29 @@ void DiscordIpc::setActivity(const DiscordActivity &activity)
 
 static QStringList socketCandidates()
 {
+    QStringList out;
+#ifdef Q_OS_WIN
+    // Discord listens on named pipes (\\.\pipe\discord-ipc-N); QLocalSocket takes the bare name and they can't be
+    // probed as files, so every index is a candidate
+    for (int i = 0; i < 10; ++i)
+        out.append(QStringLiteral("discord-ipc-%1").arg(i));
+#else
     QStringList bases;
+#ifdef Q_OS_LINUX
     const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR", QStringLiteral("/run/user/%1").arg(getuid()));
-    for (const QString &b : {runtime, qEnvironmentVariable("TMPDIR"), qEnvironmentVariable("TMP"),
+    bases.append(runtime);
+#endif
+    for (const QString &b : {qEnvironmentVariable("TMPDIR"), qEnvironmentVariable("TMP"),
                              qEnvironmentVariable("TEMP"), QStringLiteral("/tmp")}) {
         if (!b.isEmpty() && !bases.contains(b))
             bases.append(b);
     }
+#ifdef Q_OS_LINUX
     // Flatpak / Snap builds of Discord and Vesktop keep their socket in their own runtime subdirectory
     for (const char *sub : {"app/com.discordapp.Discord", "app/dev.vencord.Vesktop", "snap.discord"})
         bases.append(runtime + u'/' + QLatin1StringView(sub));
+#endif
 
-    QStringList out;
     for (const QString &b : std::as_const(bases)) {
         for (int i = 0; i < 10; ++i) {
             const QString path = QStringLiteral("%1/discord-ipc-%2").arg(b).arg(i);
@@ -125,6 +138,7 @@ static QStringList socketCandidates()
                 out.append(path);
         }
     }
+#endif
     return out;
 }
 

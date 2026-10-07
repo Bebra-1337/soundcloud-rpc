@@ -19,6 +19,10 @@ nix build                                     # produces ./result
 
 New source or QML files must be added to `CMakeLists.txt` (main UI: the `ui_qml` list; idle themes: `qml/idle/CMakeLists.txt`) and `git add`ed before `nix build`, since flakes only see tracked files. Qt logs go to the journal when stderr is not a terminal; set `QT_FORCE_STDERR_LOGGING=1` to see them in a pipe. `main.cpp` adds `--log-level=3` to `QTWEBENGINE_CHROMIUM_FLAGS` (Chromium's ERROR spam about the website's third-party requests) unless the variable already sets a log level; FFmpeg's own log is lowered to errors unless `QT_FFMPEG_DEBUG` is set.
 
+## Platforms
+
+Linux is the only tested platform. Linux-only code is guarded with `Q_OS_LINUX` (and in CMake with `CMAKE_SYSTEM_NAME STREQUAL "Linux"`, which also keeps Qt6::DBus out of other builds): `ThemeWatcher` (qt6ct palette), `Mpris` (D-Bus), and in `DiscordIpc` the `XDG_RUNTIME_DIR` / Flatpak / Snap socket paths. On Windows `DiscordIpc` tries the `discord-ipc-N` named pipes; macOS uses `$TMPDIR`. Other platforms have not been built yet: the colors there should come from a fixed fallback palette, not the system palette.
+
 ## Architecture
 
 `src/main.cpp` creates `Application` (`src/app`), which builds the backend objects, registers them as QML singletons in the `ScBackend` import (`App`, `Api`, `Auth`, `Player`, `Analyser`, plus the `PagedListModel` type), loads `SoundCloudRpc/Main.qml`, and owns the tray and window lifecycle (closing hides to the tray via an event filter on the window; only `quit()` exits).

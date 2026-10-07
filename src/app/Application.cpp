@@ -1,13 +1,15 @@
 #include "app/Application.h"
 
+#ifdef Q_OS_LINUX
 #include "app/ThemeWatcher.h"
+#include "integrations/Mpris.h"
+#endif
 
 #include "api/AuthManager.h"
 #include "api/Entities.h"
 #include "api/SoundCloudApi.h"
 #include "api/WebProfile.h"
 #include "integrations/DiscordPresence.h"
-#include "integrations/Mpris.h"
 #include "models/PagedListModel.h"
 #include "player/AudioAnalyser.h"
 #include "player/PlayerController.h"
@@ -53,8 +55,10 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
     m_player = new PlayerController(m_api, this);
     m_analyser = new AudioAnalyser(m_player->mediaPlayer(), this);
     m_discord = new DiscordPresence(m_player, this);
-    m_mpris = new Mpris(m_player, this, this);
-    new ThemeWatcher(this);
+#ifdef Q_OS_LINUX
+    m_mpris = new Mpris(m_player, this, this);  // media keys, playerctl, desktop widgets
+    new ThemeWatcher(this);                      // follows the qt6ct color scheme live
+#endif
 
     connect(m_auth, &AuthManager::tokenChanged, m_api, &SoundCloudApi::setToken);
     connect(m_api, &SoundCloudApi::authRejected, m_auth, &AuthManager::rejectToken);

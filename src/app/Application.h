@@ -14,7 +14,9 @@ class AuthManager;
 class PlayerController;
 class AudioAnalyser;
 class DiscordPresence;
+#ifdef Q_OS_LINUX
 class Mpris;
+#endif
 
 // Wires the backend (API, sign-in, player, analyser, Discord, MPRIS) to the QML window and the tray, and owns
 // window lifecycle: closing hides to the tray, only quit() exits. Exposed to QML as the `App` singleton.
@@ -70,7 +72,9 @@ private:
     PlayerController *m_player;
     AudioAnalyser *m_analyser;
     DiscordPresence *m_discord;
+#ifdef Q_OS_LINUX
     Mpris *m_mpris;
+#endif
     QQmlApplicationEngine *m_engine;
     QPointer<QQuickWindow> m_window;
     QSystemTrayIcon *m_tray = nullptr;
