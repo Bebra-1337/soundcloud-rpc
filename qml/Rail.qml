@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import ScBackend
 
-// Narrow navigation rail on the left: sections, and the signed-in user at the bottom.
+// Narrow navigation rail on the left: sections, and settings and the signed-in user at the bottom.
 Rectangle {
     id: rail
 
@@ -10,6 +10,7 @@ Rectangle {
     signal navigate(int index)
     signal openMe()
 
+    readonly property int settingsIndex: sections.length  // the gear above the avatar
     readonly property var sections: [
         { icon: "home", label: "Home" },
         { icon: "feed", label: "Feed" },
@@ -40,42 +41,62 @@ Rectangle {
 
         Repeater {
             model: rail.sections
-            Item {
-                id: entry
+            RailButton {
                 required property var modelData
                 required property int index
-                readonly property bool active: rail.current === index
-                width: 48
-                height: 44
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 12
-                    color: entry.active ? Style.raised : (hh.hovered ? Style.surface : "transparent")
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                }
-                Rectangle {
-                    x: -10
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 3
-                    height: entry.active ? 20 : 0
-                    radius: 2
-                    color: Style.accent
-                    Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                }
-                Icon {
-                    anchors.centerIn: parent
-                    name: entry.modelData.icon
-                    size: 22
-                    color: entry.active || hh.hovered ? Style.ink : Style.inkFaint
-                }
-                HoverHandler { id: hh; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: rail.navigate(entry.index) }
-                ToolTip.visible: hh.hovered
-                ToolTip.text: entry.modelData.label
-                ToolTip.delay: 500
+                icon: modelData.icon
+                label: modelData.label
+                active: rail.current === index
+                onTapped: rail.navigate(index)
             }
         }
+    }
+
+    RailButton {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: avatar.top
+        anchors.bottomMargin: 14
+        icon: "settings"
+        label: "Settings"
+        active: rail.current === rail.settingsIndex
+        onTapped: rail.navigate(rail.settingsIndex)
+    }
+
+    component RailButton: Item {
+        id: entry
+        property string icon
+        property string label
+        property bool active
+        signal tapped()
+        width: 48
+        height: 44
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 12
+            color: entry.active ? Style.raised : (hh.hovered ? Style.surface : "transparent")
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+        Rectangle {
+            x: -10
+            anchors.verticalCenter: parent.verticalCenter
+            width: 3
+            height: entry.active ? 20 : 0
+            radius: 2
+            color: Style.accent
+            Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
+        Icon {
+            anchors.centerIn: parent
+            name: entry.icon
+            size: 22
+            color: entry.active || hh.hovered ? Style.ink : Style.inkFaint
+        }
+        HoverHandler { id: hh; cursorShape: Qt.PointingHandCursor }
+        TapHandler { onTapped: entry.tapped() }
+        ToolTip.visible: hh.hovered
+        ToolTip.text: entry.label
+        ToolTip.delay: 500
     }
 
     ArtImage {

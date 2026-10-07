@@ -14,12 +14,15 @@
 #include "player/AudioAnalyser.h"
 #include "player/PlayerController.h"
 
+#include <algorithm>
+
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QDesktopServices>
+#include <QMouseEvent>
 #include <QMenu>
 #include <QQmlApplicationEngine>
 #include <QQmlEngine>
@@ -40,6 +43,32 @@ static bool isKnownColorMode(const QString &mode)
     }
     return false;
 }
+
+static const std::pair<const char *, const char *> kLanguages[] = {
+    {"system", "System"}, {"en", "English"}, {"ru", "Русский"}};
+
+static bool isKnownLanguage(const QString &language)
+{
+    for (const auto &[k, label] : kLanguages) {
+        if (language == QLatin1StringView(k))
+            return true;
+    }
+    return false;
+}
+
+static QVariantList keyLabelList(const auto &entries)
+{
+    QVariantList out;
+    for (const auto &[key, label] : entries)
+        out.append(QVariantMap{{QStringLiteral("key"), QLatin1StringView(key)}, {QStringLiteral("label"), QString::fromUtf8(label)}});
+    return out;
+}
+
+// Automatic idle screen: shown after this long without input while music plays (settings: 5..60 s).
+static constexpr int kIdleDelayDefault = 30;
+static constexpr int kIdleDelayMin = 5;
+static constexpr int kIdleDelayMax = 60;
+static constexpr int kIdleMoveThreshold = 4;  // px the pointer must travel to count as input
 
 static const QString kDefaultIdleTheme = QStringLiteral("GlassCard");
 static const std::pair<const char *, const char *> kIdleThemes[] = {
@@ -87,6 +116,24 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
     const QString mode = QSettings().value(QStringLiteral("ui/colorMode"), QStringLiteral("auto")).toString();
     m_colorMode = isKnownColorMode(mode) ? mode : QStringLiteral("auto");
     m_idleTheme = isKnownTheme(theme) ? theme : kDefaultIdleTheme;
+    const QString language = QSettings().value(QStringLiteral("ui/language"), QStringLiteral("system")).toString();
+    m_language = isKnownLanguage(language) ? language : QStringLiteral("system");
+    m_idleAuto = QSettings().value(QStringLiteral("idle/auto"), true).toBool();
+    m_idleDelay = std::clamp(QSettings().value(QStringLiteral("idle/delay"), kIdleDelayDefault).toInt(), kIdleDelayMin,
+                             kIdleDelayMax);
+
+    m_idleTimer = new QTimer(this);
+    m_idleTimer->setSingleShot(true);
+    connect(m_idleTimer, &QTimer::timeout, this, &Application::idleTimeout);
+    connect(m_player, &PlayerController::playingChanged, this, [this] {
+        const bool playing = m_player->playing();
+        if (playing == std::exchange(m_wasPlaying, playing))
+            return;
+        if (playing)
+            restartIdleTimer();  // the full delay from the moment the music starts
+        else if (m_idleShownAuto)
+            setIdleActive(false);
+    });
 
     qmlRegisterSingletonInstance("ScBackend", 1, 0, "App", this);
     qmlRegisterSingletonInstance("ScBackend", 1, 0, "Api", m_api);
@@ -125,6 +172,7 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
         if (!visible)
             setIdleActive(false);
     });
+    connect(m_window, &QWindow::visibilityChanged, this, &Application::restartIdleTimer);
 
     createTray();
     if (minimized)
@@ -159,10 +207,32 @@ Application::~Application()
 
 bool Application::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == m_window && event->type() == QEvent::Close && !m_quitting) {
+    if (watched != m_window)
+        return QObject::eventFilter(watched, event);
+    switch (event->type()) {
+    case QEvent::Close:
+        if (m_quitting)
+            break;
         event->ignore();
         m_window->hide();
         return true;
+    case QEvent::MouseMove: {
+        const QPoint pos = static_cast<QMouseEvent *>(event)->globalPosition().toPoint();
+        if (m_activityPos.x() < 0 || (pos - m_activityPos).manhattanLength() >= kIdleMoveThreshold) {
+            m_activityPos = pos;
+            noteActivity();
+        }
+        break;
+    }
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseButtonDblClick:
+    case QEvent::Wheel:
+    case QEvent::KeyPress:
+    case QEvent::TouchBegin:
+        noteActivity();
+        break;
+    default:
+        break;
     }
     return QObject::eventFilter(watched, event);
 }
@@ -189,12 +259,84 @@ void Application::setColorMode(const QString &mode)
     emit colorModeChanged();
 }
 
+QVariantList Application::colorModes() const
+{
+    return keyLabelList(kColorModes);
+}
+
 QVariantList Application::idleThemes() const
 {
-    QVariantList out;
-    for (const auto &[key, label] : kIdleThemes)
-        out.append(QVariantMap{{QStringLiteral("key"), QLatin1StringView(key)}, {QStringLiteral("label"), QLatin1StringView(label)}});
-    return out;
+    return keyLabelList(kIdleThemes);
+}
+
+QVariantList Application::languages() const
+{
+    return keyLabelList(kLanguages);
+}
+
+void Application::setLanguage(const QString &language)
+{
+    if (!isKnownLanguage(language) || language == m_language)
+        return;
+    m_language = language;
+    QSettings().setValue(QStringLiteral("ui/language"), language);
+    emit languageChanged();
+}
+
+int Application::idleDelayMin() const
+{
+    return kIdleDelayMin;
+}
+
+int Application::idleDelayMax() const
+{
+    return kIdleDelayMax;
+}
+
+void Application::setIdleAuto(bool on)
+{
+    if (on == m_idleAuto)
+        return;
+    m_idleAuto = on;
+    QSettings().setValue(QStringLiteral("idle/auto"), on);
+    restartIdleTimer();
+    emit idleAutoChanged();
+}
+
+void Application::setIdleDelay(int seconds)
+{
+    seconds = std::clamp(seconds, kIdleDelayMin, kIdleDelayMax);
+    if (seconds == m_idleDelay)
+        return;
+    m_idleDelay = seconds;
+    QSettings().setValue(QStringLiteral("idle/delay"), seconds);
+    restartIdleTimer();
+    emit idleDelayChanged();
+}
+
+void Application::noteActivity()
+{
+    // over the open idle screen the QML overlay decides (a click or key closes it, moving the pointer does not)
+    if (!m_idleActive)
+        restartIdleTimer();
+}
+
+void Application::restartIdleTimer()
+{
+    if (m_idleAuto && !m_idleActive)
+        m_idleTimer->start(m_idleDelay * 1000);
+    else
+        m_idleTimer->stop();
+}
+
+void Application::idleTimeout()
+{
+    // playback starting and the window being shown restart the timer, so a refused timeout just waits for those
+    if (!m_idleAuto || m_idleActive || !m_player->playing() || !m_window || !m_window->isVisible()
+        || m_window->visibility() == QWindow::Minimized)
+        return;
+    setIdleActive(true);
+    m_idleShownAuto = true;
 }
 
 void Application::setIdleTheme(const QString &key)
@@ -215,7 +357,9 @@ void Application::setIdleActive(bool on)
     if (on == m_idleActive)
         return;
     m_idleActive = on;
+    m_idleShownAuto = false;
     m_analyser->setActive(on);  // the analyser only runs while the screen is open
+    restartIdleTimer();
     emit idleActiveChanged();
 }
 
@@ -224,6 +368,13 @@ void Application::showIdle()
     if (m_window && (!m_window->isVisible() || m_window->visibility() == QWindow::Minimized))
         raiseWindow();
     setIdleActive(true);
+}
+
+void Application::openSettings()
+{
+    raiseWindow();
+    setIdleActive(false);
+    emit settingsRequested();
 }
 
 void Application::raiseWindow()
@@ -315,6 +466,7 @@ void Application::createTray()
     m_trayMenu->addAction(QStringLiteral("Previous"), m_player, &PlayerController::previous);
     m_trayMenu->addAction(QStringLiteral("Copy Track Link"), this, &Application::copyTrackLink);
     m_trayMenu->addAction(QStringLiteral("Show / Hide Window"), this, &Application::toggleWindow);
+    m_trayMenu->addAction(QStringLiteral("Settings…"), this, &Application::openSettings);
     m_trayMenu->addSeparator();
     createAppearanceMenu(m_trayMenu);
     createIdleMenu(m_trayMenu);

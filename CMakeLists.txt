@@ -40,10 +40,11 @@ target_include_directories(soundcloud-rpc PRIVATE src)
 target_compile_definitions(soundcloud-rpc PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
 
 set(ui_qml
-    Main.qml Style.qml Icon.qml IconButton.qml ArtImage.qml PlayingBars.qml Spinner.qml Rail.qml PageHeader.qml
+    Main.qml Style.qml Icon.qml IconButton.qml Chip.qml ArtImage.qml PlayingBars.qml Spinner.qml Rail.qml PageHeader.qml
     ChipBar.qml ItemRow.qml ItemList.qml ItemGrid.qml ItemMenu.qml Card.qml Shelf.qml Waveform.qml
     NowPlayingPanel.qml SignInPanel.qml Toast.qml
-    HomePage.qml FeedPage.qml LibraryPage.qml SearchPage.qml PlaylistPage.qml UserPage.qml QueuePage.qml)
+    HomePage.qml FeedPage.qml LibraryPage.qml SearchPage.qml PlaylistPage.qml UserPage.qml QueuePage.qml
+    SettingsPage.qml)
 set(ui_qml_paths)
 foreach(f IN LISTS ui_qml)
     # served from the module root, next to its qmldir, so the implicit directory import sees the Style singleton

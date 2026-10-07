@@ -12,25 +12,11 @@ Row {
 
     Repeater {
         model: bar.chips
-        Rectangle {
-            id: chip
+        Chip {
             required property var modelData
-            readonly property bool active: modelData.key === bar.current
-            height: 30
-            width: label.implicitWidth + 28
-            radius: 15
-            color: active ? Style.accent : (hh.hovered ? Style.hover : Style.raised)
-            Behavior on color { ColorAnimation { duration: 120 } }
-            Text {
-                id: label
-                anchors.centerIn: parent
-                text: chip.modelData.label
-                color: chip.active ? Style.onAccent : Style.ink
-                font.pixelSize: 13
-                font.weight: Font.Medium
-            }
-            HoverHandler { id: hh; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: bar.picked(chip.modelData.key) }
+            text: modelData.label
+            active: modelData.key === bar.current
+            onClicked: bar.picked(modelData.key)
         }
     }
 }

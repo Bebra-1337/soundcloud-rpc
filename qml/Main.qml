@@ -38,7 +38,7 @@ ApplicationWindow {
         shadow: "#000000"
     }
 
-    readonly property var stacks: [homeStack, feedStack, libraryStack, searchStack]
+    readonly property var stacks: [homeStack, feedStack, libraryStack, searchStack, settingsStack]
     readonly property StackView currentStack: stacks[sections.currentIndex]
 
     function navigate(index) {
@@ -88,6 +88,7 @@ ApplicationWindow {
         function onPlayCollectionRequested(item) { win.playCollection(item) }
         function onMenuRequested(item) { win.showMenu(item) }
         function onToast(text) { toast.show(text) }
+        function onSettingsRequested() { win.navigate(rail.settingsIndex) }
     }
 
     Component { id: playlistPage; PlaylistPage { } }
@@ -114,11 +115,12 @@ ApplicationWindow {
         StackView { id: feedStack; initialItem: FeedPage { } }
         StackView { id: libraryStack; initialItem: LibraryPage { } }
         StackView { id: searchStack; initialItem: SearchPage { id: searchPage } }
+        StackView { id: settingsStack; initialItem: SettingsPage { } }
     }
 
     SignInPanel {
         anchors.fill: sections
-        visible: !Api.ready
+        visible: !Api.ready && sections.currentIndex !== rail.settingsIndex
     }
 
     NowPlayingPanel {
@@ -207,6 +209,7 @@ ApplicationWindow {
     Shortcut { sequence: "Left"; enabled: !App.idleActive; onActivated: Player.seek(Player.position - 5000) }
     Shortcut { sequence: "Ctrl+L"; onActivated: if (Player.hasTrack) Api.setLiked(Player.current.id, !Api.isLiked(Player.current.id)) }
     Shortcut { sequence: "Ctrl+I"; onActivated: App.idleActive = !App.idleActive }
+    Shortcut { sequence: "Ctrl+,"; enabled: !App.idleActive; onActivated: win.navigate(rail.settingsIndex) }
     Shortcut {
         sequences: ["Esc", "Alt+Left"]
         enabled: !App.idleActive
