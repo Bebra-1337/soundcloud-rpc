@@ -97,6 +97,7 @@ ApplicationWindow {
 
     Rail {
         id: rail
+        z: 2  // above the sections: StackView push/pop slides pages out of their bounds, under the rail
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         current: sections.currentIndex
