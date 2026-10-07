@@ -43,6 +43,9 @@ QtObject {
     readonly property color outline: mix(bg, ink, 0.22)
     readonly property color inkDim: mix(ink, bg, 0.30)
     readonly property color inkFaint: mix(ink, bg, 0.55)
+    // the rail's glyph: white on dark colors, black on light ones, unless chosen in the settings
+    readonly property url logo: App.logoStyle === "black" || (App.logoStyle === "auto" && isLight) ? "qrc:/logo-dark.png"
+                                                                                                    : "qrc:/logo.png"
     readonly property color accent: followSystem ? system.accent : brandOrange
     readonly property color accentHover: luminance(accent) > 0.5 ? Qt.darker(accent, 1.12) : Qt.lighter(accent, 1.25)
     // text and icons on accent-filled buttons: the brand's black on orange, or for a system accent the window color

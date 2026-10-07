@@ -17,7 +17,7 @@ Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 128
             height: 58
-            source: "qrc:/logo.png"
+            source: Style.logo
             sourceSize: Qt.size(width * 2, height * 2)
             fillMode: Image.PreserveAspectFit
             smooth: true

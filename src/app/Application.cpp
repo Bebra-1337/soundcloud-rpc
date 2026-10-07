@@ -45,6 +45,11 @@ static bool isKnownColorMode(const QString &mode)
     return false;
 }
 
+static bool isKnownLogoStyle(const QString &style)
+{
+    return style == QLatin1StringView("auto") || style == QLatin1StringView("white") || style == QLatin1StringView("black");
+}
+
 static const std::pair<const char *, const char *> kLanguages[] = {
     {"system", "System"}, {"en", "English"}, {"ru", "Русский"}};
 
@@ -116,6 +121,8 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
     const QString theme = QSettings().value(QStringLiteral("idle/theme"), kDefaultIdleTheme).toString();
     const QString mode = QSettings().value(QStringLiteral("ui/colorMode"), QStringLiteral("auto")).toString();
     m_colorMode = isKnownColorMode(mode) ? mode : QStringLiteral("auto");
+    const QString logo = QSettings().value(QStringLiteral("ui/logo"), QStringLiteral("auto")).toString();
+    m_logoStyle = isKnownLogoStyle(logo) ? logo : QStringLiteral("auto");
     m_idleTheme = isKnownTheme(theme) ? theme : kDefaultIdleTheme;
     const QString language = QSettings().value(QStringLiteral("ui/language"), QStringLiteral("system")).toString();
     m_language = isKnownLanguage(language) ? language : QStringLiteral("system");
@@ -261,6 +268,15 @@ void Application::setColorMode(const QString &mode)
             a->setChecked(a->data().toString() == mode);
     }
     emit colorModeChanged();
+}
+
+void Application::setLogoStyle(const QString &style)
+{
+    if (!isKnownLogoStyle(style) || style == m_logoStyle)
+        return;
+    m_logoStyle = style;
+    QSettings().setValue(QStringLiteral("ui/logo"), style);
+    emit logoStyleChanged();
 }
 
 QVariantList Application::colorModes() const

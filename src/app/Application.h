@@ -34,6 +34,7 @@ class Application : public QObject
     Q_PROPERTY(int idleDelayMax READ idleDelayMax CONSTANT)
     Q_PROPERTY(QString colorMode READ colorMode WRITE setColorMode NOTIFY colorModeChanged)
     Q_PROPERTY(QVariantList colorModes READ colorModes CONSTANT)
+    Q_PROPERTY(QString logoStyle READ logoStyle WRITE setLogoStyle NOTIFY logoStyleChanged)
     Q_PROPERTY(bool systemPaletteDefault READ systemPaletteDefault CONSTANT)
     Q_PROPERTY(bool idleActive READ idleActive WRITE setIdleActive NOTIFY idleActiveChanged)
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
@@ -57,6 +58,9 @@ public:
     QString colorMode() const { return m_colorMode; }
     void setColorMode(const QString &mode);
     QVariantList colorModes() const;
+    // "auto" (black on light colors, white on dark) | "white" | "black": the glyph in the rail (Style.logo)
+    QString logoStyle() const { return m_logoStyle; }
+    void setLogoStyle(const QString &style);
     // true where "auto" follows the desktop's Qt palette (Linux with qt6ct); elsewhere "auto" is the brand dark theme
     bool systemPaletteDefault() const;
     bool idleActive() const { return m_idleActive; }
@@ -87,6 +91,7 @@ public:
 signals:
     void idleThemeChanged();
     void colorModeChanged();
+    void logoStyleChanged();
     void idleActiveChanged();
     void idleAutoChanged();
     void idleDelayChanged();
@@ -125,6 +130,7 @@ private:
     QActionGroup *m_colorGroup = nullptr;
 
     QString m_colorMode;
+    QString m_logoStyle;
     QString m_idleTheme;
     QString m_language;
     bool m_idleActive = false;

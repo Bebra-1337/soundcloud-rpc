@@ -54,6 +54,20 @@ Item {
                         onPicked: (key) => App.colorMode = key
                     }
                     Hint { text: root.colorHints[App.colorMode] || "" }
+
+                    Text {
+                        Layout.topMargin: 4
+                        text: "Logo"
+                        color: Style.inkDim
+                        font.pixelSize: 12
+                        font.weight: Font.Medium
+                    }
+                    Row {
+                        spacing: 8
+                        LogoTile { key: "auto"; label: "Automatic" }
+                        LogoTile { key: "white"; label: "White" }
+                        LogoTile { key: "black"; label: "Black" }
+                    }
                 }
 
                 Card {
@@ -220,6 +234,66 @@ Item {
                 font.pixelSize: 15
                 font.weight: Font.Bold
             }
+        }
+    }
+
+    // A logo choice drawn as it looks: the white glyph on SoundCloud's black, the black one on its white, and for
+    // automatic both halves.
+    component LogoTile: Column {
+        id: tile
+        property string key
+        property string label
+        readonly property bool active: App.logoStyle === key
+        spacing: 6
+
+        Rectangle {
+            width: 88
+            height: 44
+            radius: 10
+            clip: true
+            color: tile.key === "black" ? Style.brandWhite : Style.brandBlack
+            border.width: 2
+            border.color: tile.active ? Style.accent : (tileHover.hovered ? Style.outline : Style.surface)
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+
+            Rectangle {  // the light half of "automatic", inside the border
+                visible: tile.key === "auto"
+                x: parent.width / 2
+                y: 2
+                width: parent.width / 2 - 2
+                height: parent.height - 4
+                topRightRadius: parent.radius - 2
+                bottomRightRadius: parent.radius - 2
+                color: Style.brandWhite
+            }
+            Row {
+                anchors.centerIn: parent
+                spacing: tile.key === "auto" ? 14 : 0
+                Image {
+                    visible: tile.key !== "black"
+                    width: tile.key === "auto" ? 26 : 40
+                    height: width * 184 / 408
+                    source: "qrc:/logo.png"
+                    sourceSize: Qt.size(width * 2, height * 2)
+                    smooth: true
+                }
+                Image {
+                    visible: tile.key !== "white"
+                    width: tile.key === "auto" ? 26 : 40
+                    height: width * 184 / 408
+                    source: "qrc:/logo-dark.png"
+                    sourceSize: Qt.size(width * 2, height * 2)
+                    smooth: true
+                }
+            }
+            HoverHandler { id: tileHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: App.logoStyle = tile.key }
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: tile.label
+            color: tile.active ? Style.ink : Style.inkDim
+            font.pixelSize: 12
         }
     }
 
