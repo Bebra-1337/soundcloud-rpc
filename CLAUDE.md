@@ -21,7 +21,7 @@ New source or QML files must be added to `CMakeLists.txt` (main UI: the `ui_qml`
 
 ## Platforms
 
-Linux is the only tested platform. Linux-only code is guarded with `Q_OS_LINUX` (and in CMake with `CMAKE_SYSTEM_NAME STREQUAL "Linux"`, which also keeps Qt6::DBus out of other builds): `ThemeWatcher` (qt6ct palette), `Mpris` (D-Bus), and in `DiscordIpc` the `XDG_RUNTIME_DIR` / Flatpak / Snap socket paths. On Windows `DiscordIpc` tries the `discord-ipc-N` named pipes; macOS uses `$TMPDIR`. Other platforms have not been built yet: the colors there should come from a fixed fallback palette, not the system palette.
+Linux is the only tested platform. Linux-only code is guarded with `Q_OS_LINUX` (and in CMake with `CMAKE_SYSTEM_NAME STREQUAL "Linux"`, which also keeps Qt6::DBus out of other builds): `ThemeWatcher` (qt6ct palette), `Mpris` (D-Bus), and in `DiscordIpc` the `XDG_RUNTIME_DIR` / Flatpak / Snap socket paths. On Windows `DiscordIpc` tries the `discord-ipc-N` named pipes; macOS uses `$TMPDIR`. Other platforms have not been built yet. Colors: `Style.qml` picks its source from `App.colorMode` (`auto` / `system` / `dark` / `light`, QSettings `ui/colorMode`, tray: *Appearance*). `system` is the Qt palette (qt6ct), `dark` / `light` are SoundCloud's media-kit colors (black `#121212`, white `#FAFAFA`, orange `#FF5500`, black text on orange), with the same mixes between them as before. `auto` is `system` where `App.systemPaletteDefault` is true (Linux with qt6ct), otherwise `dark`. The idle themes are not affected.
 
 ## Architecture
 

@@ -1,10 +1,15 @@
 pragma Singleton
 import QtQuick
+import ScBackend
 
-// Colors follow the system's Qt palette (qt6ct here, which Noctalia writes its scheme into), so the client looks
-// like the rest of the desktop and follows its theme. Only the window, text and accent colors are taken as they
-// are; the surfaces, hovers and outlines between them are mixed from those, which works for dark and light
-// schemes alike. The idle themes keep their own grayscale look.
+// Colors of the main UI. Three sources, picked by `App.colorMode` (tray: Appearance):
+//  - system: the Qt palette (qt6ct on Linux, which follows the desktop theme live through ThemeWatcher). Only the
+//    window, text and accent colors are taken as they are; the surfaces, hovers and outlines between them are
+//    mixed from those, which works for dark and light schemes alike.
+//  - dark / light: SoundCloud's own colors from its media kit (black #121212, white #FAFAFA, orange #FF5500),
+//    with the same mixes between them.
+//  - auto (default): system where the desktop palette is in use (Linux with qt6ct), otherwise dark.
+// The idle themes keep their own grayscale look.
 QtObject {
     id: style
 
@@ -20,8 +25,17 @@ QtObject {
         return Qt.rgba(c.r, c.g, c.b, a)
     }
 
-    readonly property color bg: system.window
-    readonly property color ink: system.windowText
+    // SoundCloud media kit
+    readonly property color brandOrange: "#ff5500"
+    readonly property color brandBlack: "#121212"
+    readonly property color brandWhite: "#fafafa"
+
+    readonly property bool followSystem: App.colorMode === "system" || (App.colorMode === "auto" && App.systemPaletteDefault)
+    readonly property bool light: !followSystem && App.colorMode === "light"
+
+    readonly property color bg: followSystem ? system.window : (light ? brandWhite : brandBlack)
+    readonly property color ink: followSystem ? system.windowText : (light ? brandBlack : brandWhite)
+    readonly property bool isLight: luminance(bg) > 0.5   // for effects that must flip with the scheme
     readonly property color panel: mix(bg, ink, 0.03)     // rail and Now Playing column
     readonly property color surface: mix(bg, ink, 0.06)   // hovered / current rows
     readonly property color raised: mix(bg, ink, 0.10)    // chips, placeholders, menus
@@ -29,11 +43,13 @@ QtObject {
     readonly property color outline: mix(bg, ink, 0.22)
     readonly property color inkDim: mix(ink, bg, 0.30)
     readonly property color inkFaint: mix(ink, bg, 0.55)
-    readonly property color accent: system.accent
+    readonly property color accent: followSystem ? system.accent : brandOrange
     readonly property color accentHover: luminance(accent) > 0.5 ? Qt.darker(accent, 1.12) : Qt.lighter(accent, 1.25)
-    // text and icons on accent-filled buttons: the window color or the brightest text, whichever stands out more
-    readonly property color onAccent: Math.abs(luminance(accent) - luminance(bg)) > Math.abs(luminance(accent) - luminance(system.highlightedText))
-                                      ? bg : system.highlightedText
+    // text and icons on accent-filled buttons: the brand's black on orange, or for a system accent the window color
+    // or the brightest text, whichever stands out more
+    readonly property color onAccent: !followSystem ? brandBlack
+                                      : Math.abs(luminance(accent) - luminance(bg)) > Math.abs(luminance(accent) - luminance(system.highlightedText))
+                                        ? bg : system.highlightedText
 
     // artwork URLs that already failed to load, so recreated delegates don't request them again
     readonly property var missingArt: ({})

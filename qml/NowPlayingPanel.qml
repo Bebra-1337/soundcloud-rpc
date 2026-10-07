@@ -24,7 +24,7 @@ Rectangle {
         anchors.fill: parent
         visible: Player.hasTrack
         source: panel.coverUrl
-        brightness: -0.55
+        brightness: Style.isLight ? 0.55 : -0.55
         saturation: -0.4
     }
     Rectangle {

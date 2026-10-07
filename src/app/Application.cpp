@@ -29,6 +29,18 @@
 #include <QSystemTrayIcon>
 #include <QTimer>
 
+static const std::pair<const char *, const char *> kColorModes[] = {
+    {"auto", "Automatic"}, {"system", "System colors"}, {"dark", "Dark"}, {"light", "Light"}};
+
+static bool isKnownColorMode(const QString &mode)
+{
+    for (const auto &[k, label] : kColorModes) {
+        if (mode == QLatin1StringView(k))
+            return true;
+    }
+    return false;
+}
+
 static const QString kDefaultIdleTheme = QStringLiteral("GlassCard");
 static const std::pair<const char *, const char *> kIdleThemes[] = {
     {"GlassCard", "Glass Card"},     {"BlurCover", "Blur Cover"}, {"Aurora", "Aurora"},
@@ -72,6 +84,8 @@ Application::Application(bool minimized, const QStringList &urls, QObject *paren
     });
 
     const QString theme = QSettings().value(QStringLiteral("idle/theme"), kDefaultIdleTheme).toString();
+    const QString mode = QSettings().value(QStringLiteral("ui/colorMode"), QStringLiteral("auto")).toString();
+    m_colorMode = isKnownColorMode(mode) ? mode : QStringLiteral("auto");
     m_idleTheme = isKnownTheme(theme) ? theme : kDefaultIdleTheme;
 
     qmlRegisterSingletonInstance("ScBackend", 1, 0, "App", this);
@@ -151,6 +165,28 @@ bool Application::eventFilter(QObject *watched, QEvent *event)
         return true;
     }
     return QObject::eventFilter(watched, event);
+}
+
+bool Application::systemPaletteDefault() const
+{
+#ifdef Q_OS_LINUX
+    return qEnvironmentVariable("QT_QPA_PLATFORMTHEME").contains(QLatin1StringView("qt6ct"));
+#else
+    return false;
+#endif
+}
+
+void Application::setColorMode(const QString &mode)
+{
+    if (!isKnownColorMode(mode) || mode == m_colorMode)
+        return;
+    m_colorMode = mode;
+    QSettings().setValue(QStringLiteral("ui/colorMode"), mode);
+    if (m_colorGroup) {
+        for (QAction *a : m_colorGroup->actions())
+            a->setChecked(a->data().toString() == mode);
+    }
+    emit colorModeChanged();
 }
 
 QVariantList Application::idleThemes() const
@@ -280,6 +316,7 @@ void Application::createTray()
     m_trayMenu->addAction(QStringLiteral("Copy Track Link"), this, &Application::copyTrackLink);
     m_trayMenu->addAction(QStringLiteral("Show / Hide Window"), this, &Application::toggleWindow);
     m_trayMenu->addSeparator();
+    createAppearanceMenu(m_trayMenu);
     createIdleMenu(m_trayMenu);
     m_trayMenu->addSeparator();
     m_trayMenu->addAction(QStringLiteral("Sign Out"), m_auth, &AuthManager::signOut);
@@ -292,6 +329,20 @@ void Application::createTray()
     });
     connect(this, &QObject::destroyed, m_trayMenu, &QObject::deleteLater);
     m_tray->show();
+}
+
+void Application::createAppearanceMenu(QMenu *menu)
+{
+    QMenu *appearance = menu->addMenu(QStringLiteral("Appearance"));
+    m_colorGroup = new QActionGroup(this);
+    for (const auto &[key, label] : kColorModes) {
+        QAction *a = appearance->addAction(QLatin1StringView(label));
+        a->setCheckable(true);
+        a->setData(QLatin1StringView(key));
+        a->setChecked(m_colorMode == QLatin1StringView(key));
+        m_colorGroup->addAction(a);
+        connect(a, &QAction::triggered, this, [this, k = QString::fromLatin1(key)] { setColorMode(k); });
+    }
 }
 
 void Application::createIdleMenu(QMenu *menu)

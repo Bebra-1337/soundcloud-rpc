@@ -25,6 +25,8 @@ class Application : public QObject
     Q_OBJECT
     Q_PROPERTY(QString idleTheme READ idleTheme WRITE setIdleTheme NOTIFY idleThemeChanged)
     Q_PROPERTY(QVariantList idleThemes READ idleThemes CONSTANT)
+    Q_PROPERTY(QString colorMode READ colorMode WRITE setColorMode NOTIFY colorModeChanged)
+    Q_PROPERTY(bool systemPaletteDefault READ systemPaletteDefault CONSTANT)
     Q_PROPERTY(bool idleActive READ idleActive WRITE setIdleActive NOTIFY idleActiveChanged)
 
 public:
@@ -34,6 +36,11 @@ public:
     QString idleTheme() const { return m_idleTheme; }
     void setIdleTheme(const QString &key);
     QVariantList idleThemes() const;
+    // "auto" | "system" | "dark" | "light": which colors the main UI uses (Style.qml)
+    QString colorMode() const { return m_colorMode; }
+    void setColorMode(const QString &mode);
+    // true where "auto" follows the desktop's Qt palette (Linux with qt6ct); elsewhere "auto" is the brand dark theme
+    bool systemPaletteDefault() const;
     bool idleActive() const { return m_idleActive; }
     void setIdleActive(bool on);
 
@@ -54,6 +61,7 @@ public:
 
 signals:
     void idleThemeChanged();
+    void colorModeChanged();
     void idleActiveChanged();
     void openItemRequested(const QVariantMap &item);
     void playCollectionRequested(const QVariantMap &item);
@@ -66,6 +74,7 @@ protected:
 private:
     void createTray();
     void createIdleMenu(QMenu *menu);
+    void createAppearanceMenu(QMenu *menu);
 
     SoundCloudApi *m_api;
     AuthManager *m_auth;
@@ -80,7 +89,9 @@ private:
     QSystemTrayIcon *m_tray = nullptr;
     QMenu *m_trayMenu = nullptr;
     QActionGroup *m_themeGroup = nullptr;
+    QActionGroup *m_colorGroup = nullptr;
 
+    QString m_colorMode;
     QString m_idleTheme;
     bool m_idleActive = false;
     bool m_quitting = false;
