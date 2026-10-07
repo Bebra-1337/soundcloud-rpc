@@ -423,6 +423,10 @@ void PlayerController::resolveAndPlay(qint64 resumeAt, bool fresh)
                 emit message(QStringLiteral("SoundCloud returned no stream for this track"));
                 return;
             }
+            // setSource() stops the old source first, and that stop reports LoadedMedia, which would spend
+            // m_resumeAt on the old source (the new one then started at 0 after a long pause or an error)
+            m_hasSource = false;
+            m_player->setSource({});
             m_resumeAt = resumeAt;
             m_hasSource = true;
             m_player->setSource(QUrl(url));
