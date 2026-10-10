@@ -38,6 +38,7 @@ stdenv.mkDerivation {
     qt6.qtwebengine # only for the one-time sign-in window
     qt6.qtwayland
     qt6.qtsvg
+    qt6.qtshadertools # qsb: the idle themes' shaders are compiled at build time
   ];
 
   desktopItems = [

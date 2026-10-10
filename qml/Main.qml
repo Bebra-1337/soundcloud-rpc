@@ -163,6 +163,9 @@ ApplicationWindow {
         visible: opacity > 0.001
         active: App.idleActive
         theme: App.idleTheme
+        bg: Style.bg
+        ink: Style.ink
+        accent: Style.accent
         title: Player.current.title || ""
         artist: Player.current.artist || ""
         cover: nowPlaying.coverUrl
@@ -176,6 +179,21 @@ ApplicationWindow {
         audioMid: Analyser.mid
         audioTreble: Analyser.treble
         audioLevel: Analyser.level
+        liked: Player.hasTrack && Api.likesRevision >= 0 && Api.isLiked(Player.current.id)
+        shuffle: Player.shuffle
+        repeatMode: Player.repeatMode
+        volume: Player.volume
+        muted: Player.muted
+        onControlsUsed: App.idleInteracted()
+        onTogglePlayRequested: Player.togglePlay()
+        onNextRequested: Player.next()
+        onPreviousRequested: Player.previous()
+        onSeekRequested: (seconds) => Player.seek(seconds * 1000)
+        onLikeRequested: if (Player.hasTrack) Api.setLiked(Player.current.id, !liked)
+        onShuffleRequested: Player.shuffle = !Player.shuffle
+        onRepeatRequested: Player.cycleRepeat()
+        onVolumeRequested: (value) => { Player.volume = value; Player.muted = false }
+        onMuteRequested: Player.muted = !Player.muted
 
         property double shownAt: 0
         onActiveChanged: if (active) {

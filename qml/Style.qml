@@ -9,7 +9,7 @@ import ScBackend
 //  - dark / light: SoundCloud's own colors from its media kit (black #121212, white #FAFAFA, orange #FF5500),
 //    with the same mixes between them.
 //  - auto (default): system where the desktop palette is in use (Linux with qt6ct), otherwise dark.
-// The idle themes keep their own grayscale look.
+// The idle screen gets bg, ink and accent from here too (Main.qml → IdleScreen, which hands them to the themes).
 QtObject {
     id: style
 

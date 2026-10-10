@@ -1,89 +1,77 @@
 import QtQuick
-import QtQuick.Effects
 
+// Triptych: the title set right-aligned against the cover, the cover in the middle, the time left on the other side.
+// The cover's colors drift behind it all. The cover breathes very slightly while the music plays.
 ThemeBase {
     id: root
+    readonly property real side: 70 * u
 
     background: [
-        Rectangle { anchors.fill: parent; color: "#0e0e0e" },
-        Item {
-            anchors.fill: parent
-            layer.enabled: true
-            layer.smooth: true
-            layer.textureSize: Qt.size(Math.max(1, root.width / 8), Math.max(1, root.height / 8))
-            layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 64 }
-            Repeater {
-                model: ["#e6e6e6", "#8a8a8a", "#bdbdbd", "#5a5a5a", "#d0d0d0"]
-                Rectangle {
-                    readonly property int kx: [1, 2, 1, 3, 2][index]
-                    readonly property int ky: [2, 1, 3, 1, 2][index]
-                    width: (55 + index * 8) * root.u; height: width * 0.7; radius: height / 2
-                    color: modelData
-                    opacity: 0.32
-                    rotation: index * 37 + root.t * 57.3 * 0
-                    x: root.width * (0.5 + 0.42 * Math.sin(root.t * kx + index * 1.7)) - width / 2
-                    y: root.height * (0.5 + 0.38 * Math.cos(root.t * ky + index * 2.3)) - height / 2
-                }
-            }
-        },
-        Vignette { strength: 0.6 },
-        Grain { }
+        BlurBackdrop { anchors.fill: parent; source: root.cover; veil: root.light ? 0.55 : 0.5; saturation: 0.2 }
     ]
 
-    // symmetric composition: title left, cover center, countdown right
-    // The cover is rendered once into a 2x texture and the pulse only scales that texture. Scaling the live
-    // cover (image + mask + effects) showed ragged top corners; this stays smooth.
+    // The cover is rendered once into a 2x texture and the pulse only scales that texture. Scaling the live cover
+    // (image + mask + effects) showed ragged corners; this stays smooth.
     Item {
         id: art
-        x: (286 - 76) / 2 * root.u
-        y: 12 * root.u
-        width: 76 * root.u
-        height: width
-        Shadow { anchors.fill: parent; radius: 3 * root.u; offsetY: 0.06 * height; strength: 0.6 }
+        x: (286 * root.u - root.side) / 2; y: 15 * root.u
+        width: root.side; height: width
+        Shadow { anchors.fill: parent; radius: 1.6 * root.u; strength: 0.8 }
         Item {
-            id: pulse
             anchors.fill: parent
             layer.enabled: true
             layer.smooth: true
             layer.mipmap: true
             layer.textureSize: Qt.size(width * 2, height * 2)
-            Cover { anchors.fill: parent; radius: 3 * root.u; source: root.cover; shadow: false }
+            Cover { anchors.fill: parent; radius: 1.6 * root.u; source: root.cover; shadow: false }
             SequentialAnimation on scale {
                 loops: Animation.Infinite
                 running: root.playing
-                NumberAnimation { to: 1.025; duration: 2200; easing.type: Easing.InOutSine }
-                NumberAnimation { to: 1.0; duration: 2200; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1.012; duration: 3200; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1.0; duration: 3200; easing.type: Easing.InOutSine }
             }
         }
     }
-    Column {
-        x: 8 * root.u; width: 80 * root.u
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: 1.4 * root.u
-        NowPlaying { width: parent.width; unit: root.u; playing: root.playing; align: Text.AlignRight }
-        Text {
-            width: parent.width; text: root.title || "Nothing playing"; color: root.ink
-            horizontalAlignment: Text.AlignRight; wrapMode: Text.WordWrap; maximumLineCount: 3; elide: Text.ElideRight
-            font.pixelSize: 7.6 * root.u; font.weight: Font.DemiBold; lineHeight: 0.95; font.letterSpacing: -0.9
-        }
-        Text {
-            width: parent.width; text: root.artist; color: root.inkDim; visible: text !== ""
-            horizontalAlignment: Text.AlignRight; elide: Text.ElideRight; font.pixelSize: 4.4 * root.u
-        }
+
+    TrackInfo {
+        x: art.x - 12 * root.u - width
+        y: art.y + (art.height - height) / 2
+        width: 88 * root.u
+        unit: root.u
+        align: Text.AlignRight
+        titleSize: 8.4
+        titleLines: 3
+        showProgress: false
+        title: root.title; artist: root.artist; playing: root.playing
     }
+
     Column {
-        x: 198 * root.u; width: 80 * root.u
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: 0.5 * root.u
-        Text {
-            text: "REMAINING"; color: root.inkDim
-            font.pixelSize: 2.3 * root.u; font.letterSpacing: 0.45 * root.u; font.weight: Font.Medium
+        x: art.x + art.width + 12 * root.u
+        width: 72 * root.u
+        anchors.verticalCenter: art.verticalCenter
+        IdleText {
+            //: label above the time left in the track
+            text: qsTr("Remaining")
+            color: root.alpha(root.ink, 0.6)
+            size: 2.4 * root.u
+            font.capitalization: Font.AllUppercase
+            weight: 600
+            tracking: 0.14
         }
-        Text {
+        IdleText {
             text: root.remainingText.replace("-", "")
-            color: root.ink; font.pixelSize: 21 * root.u; font.family: "monospace"; font.weight: Font.Light
+            size: 22 * root.u
+            weight: 250
+            tracking: -0.03
+            tabular: true
+            lineHeight: 0.95
+        }
+        Item { width: 1; height: 3 * root.u }
+        Progress {
+            width: parent.width; unit: root.u; value: root.progress; playing: root.playing; theme: root
+            leftText: root.elapsedText; rightText: root.fmt(root.duration)
         }
         Item { width: 1; height: 1 * root.u }
-        Progress { width: parent.width; unit: root.u; value: root.progress; leftText: root.elapsedText; rightText: ""; labels: true }
+        Controls { width: parent.width; unit: root.u; theme: root; compact: true }
     }
 }

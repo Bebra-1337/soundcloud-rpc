@@ -1,106 +1,209 @@
 import QtQuick
-import QtQuick.Effects
 
+// Turntable: a record set large and cut by the window's edge, the cover as its label turning at 33⅓ rpm while the
+// music plays, a tonearm whose stylus moves from the lead-in toward the label as the track progresses. The grooves and
+// the light on them stay put (a turning record looks still except for its label).
 ThemeBase {
     id: root
-    readonly property real armAngle: root.playing ? 26 + root.progress * 12 : 4
+    readonly property real dia: 112 * u
+    readonly property real cx: 46 * u
+    readonly property real cy: 50 * u
+    // tonearm angle: off the record when paused, from the outer groove (19.5°, the stylus at 0.95 of the radius) to
+    // the inner one by the label (48°, 0.38) over the track
+    readonly property real armTarget: playing ? 19.5 + 28.5 * progress : 4
+    // The arm follows on a critically damped spring: it eases into a swing on and off the record and out of it again,
+    // tracks the progress without lag while playing, and is not restarted by the position's updates every frame
+    // (a Behavior was, and barely moved).
+    property real armAngle: 4
+    property real armSpeed: 0
+    readonly property real armOmega: 5
+    Component.onCompleted: armAngle = armTarget
+    FrameAnimation {
+        running: Math.abs(root.armTarget - root.armAngle) > 0.005 || Math.abs(root.armSpeed) > 0.005
+        onTriggered: {
+            const steps = 4
+            const h = Math.min(frameTime, 0.05) / steps
+            const w = root.armOmega
+            let x = root.armAngle, v = root.armSpeed
+            for (let i = 0; i < steps; ++i) {
+                v += (w * w * (root.armTarget - x) - 2 * w * v) * h
+                x += v * h
+            }
+            root.armAngle = x
+            root.armSpeed = v
+        }
+    }
+    readonly property color metalHi: light ? "#d9d9d9" : "#a8a8a8"
+    readonly property color metalLo: light ? "#8f8f8f" : "#565656"
 
     background: [
-        Rectangle {
-            anchors.fill: parent
-            gradient: Gradient {
-                GradientStop { position: 0; color: "#1c1c1c" }
-                GradientStop { position: 1; color: "#0a0a0a" }
-            }
-        },
-        // spotlight behind the turntable
-        Rectangle {
-            x: root.width * 0.21 - width / 2; y: root.height / 2 - height / 2
-            width: 120 * root.u; height: width; radius: width / 2; color: "white"; opacity: 0.07
-            layer.enabled: true; layer.smooth: true
-            layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 64 }
-        },
-        Vignette { strength: 0.6 },
-        Grain { }
+        Rectangle { anchors.fill: parent; color: root.bg },
+        Glow {
+            x: (root.width - 286 * root.u) / 2 + root.cx - width / 2
+            y: (root.height - 100 * root.u) / 2 + root.cy - height / 2
+            width: root.dia * 1.7; height: width
+            strength: root.light ? 0.14 : 0.1
+        }
     ]
 
     Item {
         id: rec
-        x: 10 * root.u
-        y: 4 * root.u
-        width: 92 * root.u
-        height: width
+        x: root.cx - root.dia / 2; y: root.cy - root.dia / 2
+        width: root.dia; height: root.dia
 
-        Shadow { anchors.fill: parent; radius: width / 2; offsetY: 2 * root.u; strength: 0.7 }
-        Rectangle { anchors.fill: parent; radius: width / 2; color: "#0d0d0d"; border.color: "#2b2b2b"; border.width: 2 }
-        Repeater {
-            model: 24
-            Rectangle {
-                anchors.centerIn: parent
-                width: parent.width * (0.965 - index * 0.0245); height: width; radius: width / 2
-                color: "transparent"
-                border.color: index % 4 === 0 ? "#242424" : "#171717"
-                border.width: 1
-            }
-        }
-        // light sweeps that rotate with the disc
+        Shadow { anchors.fill: parent; radius: width / 2; strength: 0.9; offsetY: 2.5 * root.u }
+
+        // the disc and its grooves, painted once
         Canvas {
-            id: sheen
             anchors.fill: parent
-            RotationAnimator on rotation { from: 0; to: 360; duration: 5400; loops: Animation.Infinite; running: root.playing }
             onWidthChanged: requestPaint()
             onPaint: {
                 var c = getContext("2d")
                 c.reset()
-                var g = c.createConicalGradient(width / 2, height / 2, 0)
+                var R = width / 2
+                c.translate(R, R)
+                var g = c.createRadialGradient(0, 0, 0, 0, 0, R)
+                g.addColorStop(0, "#1a1a1a"); g.addColorStop(0.9, "#101010"); g.addColorStop(1, "#151515")
+                c.fillStyle = g
+                c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2); c.fill()
+                // grooves: fine rings, with smooth bands between the songs on the side
+                var gaps = [0.83, 0.71, 0.6, 0.5]
+                for (var r = R * 0.965; r > R * 0.37; r -= 1.15) {
+                    var f = r / R, gap = false
+                    for (var i = 0; i < gaps.length; i++) if (Math.abs(f - gaps[i]) < 0.006) gap = true
+                    c.strokeStyle = gap ? "rgba(0,0,0,0.5)" : (Math.round(r) % 2 ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.35)")
+                    c.lineWidth = 0.8
+                    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke()
+                }
+                // the rim
+                c.strokeStyle = "rgba(255,255,255,0.08)"; c.lineWidth = 1
+                c.beginPath(); c.arc(0, 0, R - 0.5, 0, Math.PI * 2); c.stroke()
+            }
+        }
+        // light on the grooves: two narrow reflections opposite each other and a broad soft one
+        Canvas {
+            anchors.fill: parent
+            onWidthChanged: requestPaint()
+            onPaint: {
+                var c = getContext("2d")
+                c.reset()
+                var R = width / 2
+                var g = c.createConicalGradient(R, R, -Math.PI * 0.3)
                 g.addColorStop(0.00, "rgba(255,255,255,0)")
-                g.addColorStop(0.05, "rgba(255,255,255,0.13)")
-                g.addColorStop(0.11, "rgba(255,255,255,0)")
+                g.addColorStop(0.06, "rgba(255,255,255,0.13)")
+                g.addColorStop(0.12, "rgba(255,255,255,0)")
+                g.addColorStop(0.30, "rgba(255,255,255,0.03)")
                 g.addColorStop(0.50, "rgba(255,255,255,0)")
-                g.addColorStop(0.55, "rgba(255,255,255,0.13)")
-                g.addColorStop(0.61, "rgba(255,255,255,0)")
+                g.addColorStop(0.56, "rgba(255,255,255,0.1)")
+                g.addColorStop(0.62, "rgba(255,255,255,0)")
                 g.addColorStop(1.00, "rgba(255,255,255,0)")
                 c.fillStyle = g
                 c.beginPath()
-                c.arc(width / 2, height / 2, width / 2 - 3, 0, Math.PI * 2)
+                c.arc(R, R, R * 0.97, 0, Math.PI * 2)
+                c.arc(R, R, R * 0.36, 0, Math.PI * 2, true)
                 c.fill()
             }
         }
-        Cover {
+        // the label: the cover, turning; pre-rendered into a 2x texture so the turning edge stays smooth
+        Item {
             anchors.centerIn: parent
-            width: parent.width * 0.36; height: width; radius: width / 2
-            source: root.cover; shadow: false
+            width: root.dia * 0.34; height: width
+            layer.enabled: true
+            layer.smooth: true
+            layer.mipmap: true
+            layer.textureSize: Qt.size(width * 2, height * 2)
+            RotationAnimator on rotation { from: 0; to: 360; duration: 1800; loops: Animation.Infinite; running: root.playing }
+            Cover { anchors.fill: parent; radius: width / 2; source: root.cover; shadow: false; edge: false }
         }
-        Rectangle { anchors.centerIn: parent; width: parent.width * 0.03; height: width; radius: width / 2; color: "#0d0d0d"; border.color: "#333"; border.width: 1 }
-        Ring {
+        // spindle
+        Rectangle {
             anchors.centerIn: parent
-            width: parent.width + 6 * root.u; height: width
-            value: root.progress; color: root.ink; lineWidth: 0.35 * root.u; trackColor: "#1fffffff"
+            width: 1.8 * root.u; height: width; radius: width / 2
+            gradient: Gradient {
+                GradientStop { position: 0; color: "#e6e6e6" }
+                GradientStop { position: 1; color: "#7a7a7a" }
+            }
         }
     }
 
-    // tonearm: pivot at the top right of the record, swings onto the groove and creeps inward
+    // tonearm: pivot top right of the record; everything below turns about it
     Item {
-        x: 116 * root.u; y: 12 * root.u
-        Rectangle { x: -4.5 * root.u; y: -4.5 * root.u; width: 9 * root.u; height: width; radius: width / 2; color: "#2a2a2a"; border.color: "#4a4a4a"; border.width: 2 }
+        x: 118 * root.u; y: 12 * root.u
         Item {
             id: arm
-            width: 1.8 * root.u; height: 62 * root.u
-            x: -width / 2
-            transformOrigin: Item.Top
+            width: 0; height: 0
             rotation: root.armAngle
-            Behavior on rotation { NumberAnimation { duration: 1100; easing.type: Easing.InOutQuad } }
-            Rectangle { anchors.fill: parent; radius: width / 2; color: "#bdbdbd" }
-            Rectangle { x: -1.6 * root.u; y: parent.height - 2 * root.u; width: 5 * root.u; height: 9 * root.u; radius: 0.8 * root.u; color: "#8a8a8a" }
+            // counterweight behind the pivot
+            Rectangle {
+                x: -3.2 * root.u; y: -12 * root.u
+                width: 6.4 * root.u; height: 8 * root.u; radius: 0.8 * root.u
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: root.metalLo }
+                    GradientStop { position: 0.45; color: root.metalHi }
+                    GradientStop { position: 1; color: root.metalLo }
+                }
+            }
+            // the tube
+            Rectangle {
+                x: -0.6 * root.u; y: -5 * root.u
+                width: 1.2 * root.u; height: 66 * root.u
+                radius: width / 2
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: root.metalLo }
+                    GradientStop { position: 0.4; color: root.metalHi }
+                    GradientStop { position: 1; color: root.metalLo }
+                }
+            }
+            // headshell and cartridge, angled like a real one
+            Item {
+                y: 60 * root.u
+                rotation: 22
+                transformOrigin: Item.TopLeft
+                Rectangle {
+                    x: -2 * root.u; y: 0
+                    width: 4 * root.u; height: 9.5 * root.u; radius: 0.6 * root.u
+                    color: root.light ? "#3a3a3a" : "#262626"
+                    border.color: root.alpha("#ffffff", 0.08); border.width: 1
+                }
+                Rectangle {
+                    x: -1.5 * root.u; y: 5.4 * root.u
+                    width: 3 * root.u; height: 3.4 * root.u; radius: 0.3 * root.u
+                    color: root.accent
+                }
+                // finger lift
+                Rectangle {
+                    x: 1.8 * root.u; y: 1.2 * root.u
+                    width: 2.6 * root.u; height: 0.7 * root.u; radius: height / 2
+                    color: root.metalHi
+                }
+            }
         }
-        Rectangle { x: -2.5 * root.u; y: -2.5 * root.u; width: 5 * root.u; height: width; radius: width / 2; color: "#6a6a6a" }
+        // the pivot housing sits on top of the arm
+        Rectangle {
+            x: -5.5 * root.u; y: -5.5 * root.u
+            width: 11 * root.u; height: width; radius: width / 2
+            gradient: Gradient {
+                GradientStop { position: 0; color: root.metalHi }
+                GradientStop { position: 1; color: root.metalLo }
+            }
+            border.color: root.alpha(root.light ? "#000000" : "#ffffff", 0.08); border.width: 1
+            Rectangle {
+                anchors.centerIn: parent
+                width: 5 * root.u; height: width; radius: width / 2
+                color: root.light ? "#4a4a4a" : "#1c1c1c"
+            }
+        }
     }
 
     TrackInfo {
-        x: 132 * root.u
+        x: 136 * root.u
         y: (100 * root.u - height) / 2
-        width: 141 * root.u
+        width: 136 * root.u
         unit: root.u
+        theme: root
+        titleSize: 9.6
         title: root.title; artist: root.artist; playing: root.playing
         progress: root.progress; elapsedText: root.elapsedText; remainingText: root.remainingText
     }

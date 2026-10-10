@@ -85,6 +85,8 @@ public:
     Q_INVOKABLE void raiseWindow();
     Q_INVOKABLE void toggleWindow();
     Q_INVOKABLE void showIdle();
+    // the idle screen's controls were used: a screen the timer opened now stays when the music pauses
+    Q_INVOKABLE void idleInteracted() { m_idleShownAuto = false; }
     Q_INVOKABLE void openSettings();
     Q_INVOKABLE void copyTrackLink();
     Q_INVOKABLE void copyLink(const QString &url);

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Window
 
 // Standalone gallery of idle themes with fake data. Keys: ←/→ theme, Space play/pause,
-// T long title, C no cover, A auto-cycle, M fake music signal, Esc quit.
+// T long title, C no cover, A auto-cycle, M fake music signal, P color scheme, Esc quit.
 Window {
     id: win
     width: 1280
@@ -14,8 +14,12 @@ Window {
     property string shotsDir: ""
     property url coverUrl: "qrc:/soundcloud.png"
     property string themeFilter: ""
-    readonly property var allThemes: ["BlurCover", "Aurora", "Vinyl", "Cassette", "Particles", "Equalizer", "Polaroid",
-        "Stereo", "MinimalClock", "Typography", "Neon", "AlbumWall", "Orbit", "GlassCard", "Starfield"]
+    // the app's color modes: SoundCloud's dark and light, or the desktop's palette (qt6ct)
+    property string paletteName: "dark"
+    readonly property var paletteNames: ["dark", "light", "system"]
+    SystemPalette { id: sys; colorGroup: SystemPalette.Active }
+    readonly property var allThemes: ["GlassCard", "BlurCover", "Aurora", "Vinyl", "Cassette", "Particles", "Equalizer", "Polaroid",
+        "Stereo", "MinimalClock", "Typography", "Neon", "AlbumWall", "Orbit", "Starfield"]
     readonly property var themes: themeFilter ? allThemes.filter(function (n) { return themeFilter.split(",").indexOf(n) >= 0 }) : allThemes
     property int idx: 0
     property bool playing: true
@@ -33,8 +37,13 @@ Window {
     property var audioBandsFakeL: []
     property var audioBandsFakeR: []
     property real pos: 61
+    property bool liked: true
+    property bool shuffle: false
+    property int repeatMode: 1
+    property real volume: 0.7
+    property bool muted: false
     property int frames: 0
-    readonly property real dur: 227
+    property real dur: 227
 
     Timer {
         interval: 250; repeat: true; running: win.playing
@@ -76,24 +85,43 @@ Window {
         onTriggered: { console.log("FPS[" + win.themes[win.idx] + "]: " + win.frames); win.frames = 0 }
     }
 
-    Loader {
-        id: ld
+    IdleScreen {
+        id: host
         anchors.fill: parent
-        source: "themes/" + win.themes[win.idx] + ".qml"
+        active: true
+        theme: win.themes[win.idx]
+        bg: win.paletteName === "system" ? sys.window : (win.paletteName === "light" ? "#fafafa" : "#121212")
+        ink: win.paletteName === "system" ? sys.windowText : (win.paletteName === "light" ? "#121212" : "#fafafa")
+        accent: win.paletteName === "system" ? sys.accent : "#ff5500"
+        title: win.longTitle ? "Very Long Track Title That Goes On And On (Extended Club Remix) [feat. Someone Else]" : "Midnight City"
+        artist: win.longTitle ? "An Artist With A Really Long Name & Another Collaborator" : "M83"
+        cover: win.noCover ? "" : win.coverUrl
+        syncPosition: win.pos
+        duration: win.dur
+        playing: win.playing
+        audioBands: win.fakeAudio ? win.audioBandsFake : []
+        audioBandsL: win.fakeAudio ? win.audioBandsFakeL : []
+        audioBandsR: win.fakeAudio ? win.audioBandsFakeR : []
+        audioBass: win.fakeAudio ? win.audioB : 0
+        audioMid: win.fakeAudio ? win.audioM : 0
+        audioTreble: win.fakeAudio ? win.audioT : 0
+        audioLevel: win.fakeAudio ? win.audioL : 0
+        // a stand-in player for the controls
+        liked: win.liked
+        shuffle: win.shuffle
+        repeatMode: win.repeatMode
+        volume: win.volume
+        muted: win.muted
+        onTogglePlayRequested: win.playing = !win.playing
+        onNextRequested: win.pos = 0
+        onPreviousRequested: win.pos = 0
+        onSeekRequested: (seconds) => win.pos = seconds
+        onLikeRequested: win.liked = !win.liked
+        onShuffleRequested: win.shuffle = !win.shuffle
+        onRepeatRequested: win.repeatMode = (win.repeatMode + 1) % 3
+        onVolumeRequested: (value) => { win.volume = value; win.muted = false }
+        onMuteRequested: win.muted = !win.muted
     }
-    Binding { target: ld.item; property: "title"; value: win.longTitle ? "Very Long Track Title That Goes On And On (Extended Club Remix) [feat. Someone Else]" : "Midnight City"; when: ld.item }
-    Binding { target: ld.item; property: "artist"; value: win.longTitle ? "An Artist With A Really Long Name & Another Collaborator" : "M83"; when: ld.item }
-    Binding { target: ld.item; property: "cover"; value: win.noCover ? "" : win.coverUrl; when: ld.item }
-    Binding { target: ld.item; property: "position"; value: win.pos; when: ld.item }
-    Binding { target: ld.item; property: "duration"; value: win.dur; when: ld.item }
-    Binding { target: ld.item; property: "audioBands"; value: win.fakeAudio ? win.audioBandsFake : []; when: ld.item }
-    Binding { target: ld.item; property: "audioBandsL"; value: win.fakeAudio ? win.audioBandsFakeL : []; when: ld.item }
-    Binding { target: ld.item; property: "audioBandsR"; value: win.fakeAudio ? win.audioBandsFakeR : []; when: ld.item }
-    Binding { target: ld.item; property: "audioBass"; value: win.fakeAudio ? win.audioB : 0; when: ld.item }
-    Binding { target: ld.item; property: "audioMid"; value: win.fakeAudio ? win.audioM : 0; when: ld.item }
-    Binding { target: ld.item; property: "audioTreble"; value: win.fakeAudio ? win.audioT : 0; when: ld.item }
-    Binding { target: ld.item; property: "audioLevel"; value: win.fakeAudio ? win.audioL : 0; when: ld.item }
-    Binding { target: ld.item; property: "playing"; value: win.playing; when: ld.item }
 
     Item {
         focus: true
@@ -106,6 +134,7 @@ Window {
             else if (e.key === Qt.Key_C) win.noCover = !win.noCover
             else if (e.key === Qt.Key_A) win.autoCycle = !win.autoCycle
             else if (e.key === Qt.Key_M) win.fakeAudio = !win.fakeAudio
+            else if (e.key === Qt.Key_P) win.paletteName = win.paletteNames[(win.paletteNames.indexOf(win.paletteName) + 1) % win.paletteNames.length]
             else if (e.key === Qt.Key_Escape) Qt.quit()
             hint.opacity = 1; hintFade.restart()
         }
@@ -113,8 +142,8 @@ Window {
     Text {
         id: hint
         x: 16; y: 12
-        text: (win.idx + 1) + "/" + win.themes.length + "  " + win.themes[win.idx]
-              + "    ←/→ theme · Space play/pause · T long title · C no cover · A auto · M music · Esc quit"
+        text: (win.idx + 1) + "/" + win.themes.length + "  " + win.themes[win.idx] + "  (" + win.paletteName + ")"
+              + "    ←/→ theme · Space play/pause · T long title · C no cover · A auto · M music · P colors · Esc quit"
         color: "white"; style: Text.Outline; styleColor: "black"; font.pixelSize: 15
         z: 100
         SequentialAnimation on opacity { id: hintFade; running: true
@@ -125,7 +154,7 @@ Window {
     Timer {
         interval: 2200; repeat: true; running: win.shotsDir !== ""
         onTriggered: {
-            ld.grabToImage(function (r) {
+            host.grabToImage(function (r) {
                 r.saveToFile(win.shotsDir + "/" + (win.idx < 9 ? "0" : "") + (win.idx + 1) + "_" + win.themes[win.idx] + ".png")
                 if (win.idx === win.themes.length - 1) Qt.quit(); else win.idx++
             })

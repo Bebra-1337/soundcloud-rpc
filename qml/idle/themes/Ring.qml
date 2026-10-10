@@ -4,8 +4,8 @@ import QtQuick
 Canvas {
     id: ring
     property real value: 0
-    property color color: "white"
-    property color trackColor: "#22ffffff"
+    property color color: palette.accent
+    property color trackColor: Qt.rgba(palette.windowText.r, palette.windowText.g, palette.windowText.b, 0.14)
     property real lineWidth: 4
     property real ratio: 1
     property int half: 0
@@ -13,6 +13,7 @@ Canvas {
 
     onValueChanged: requestPaint()
     onColorChanged: requestPaint()
+    onTrackColorChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
 

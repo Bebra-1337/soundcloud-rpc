@@ -1,108 +1,199 @@
 import QtQuick
-import QtQuick.Effects
 
-// Stereo mirror: the left channel's spectrum on the left half, the right channel's on the right, bass at the
-// centre and highs at the edges. Sound that plays in one ear only lights up one side. The analyser is a blurred
-// backdrop, half the window tall, behind the cover and the text. Peak caps hold and fall.
+// Stereo: a pair of backlit VU meters, left and right channel, their needles swinging with the level of each side
+// (with the weight and overshoot of a real needle). The track sits in a column beside them.
 ThemeBase {
     id: root
-    readonly property int perSide: 46
-    property var capsL: []
-    property var capsR: []
-    readonly property real maxBar: 50 * u                          // half the window height
-    readonly property real sy: Math.round((height - 100 * u) / 2)
 
-    // spectrum value at position 0 (bass) .. 1 (highs), linearly interpolated between the 32 bands
-    function at(arr, pos) {
-        if (!arr || arr.length === 0) return 0
-        var p = pos * (arr.length - 1)
-        var i = Math.floor(p), f = p - i
-        var a = arr[i], c = arr[Math.min(i + 1, arr.length - 1)]
-        return a + (c - a) * f
+    // loudness of one channel 0..1 from its normalised spectrum (mean square, so the bass carries as it does on a meter)
+    function loudness(arr) {
+        if (!arr || !arr.length) return 0
+        var s = 0
+        for (var i = 0; i < arr.length; i++) s += arr[i] * arr[i] * (i < 12 ? 1.4 : 0.8)
+        return Math.min(1, Math.sqrt(s / arr.length) * 1.25)
     }
-    function posOf(index) { return index / (root.perSide - 1) }   // 0 at the centre .. 1 at the edge
+    readonly property real levelL: loudness(bandsL)
+    readonly property real levelR: loudness(bandsR)
 
-    Timer {
-        interval: 33; repeat: true; running: true
-        onTriggered: {
-            var nl = [], nr = []
-            var any = false
-            for (var i = 0; i < root.perSide; i++) {
-                var cl = i < root.capsL.length ? root.capsL[i] : 0
-                var cr = i < root.capsR.length ? root.capsR[i] : 0
-                cl = Math.max(root.at(root.bandsL, root.posOf(i)), cl - 0.014)
-                cr = Math.max(root.at(root.bandsR, root.posOf(i)), cr - 0.014)
-                if (cl > 0.004 || cr > 0.004) any = true
-                nl.push(cl); nr.push(cr)
+    background: [
+        Rectangle { anchors.fill: parent; color: root.bg },
+        Glow {
+            x: (root.width - 286 * root.u) / 2 + 191 * root.u - width / 2
+            y: (root.height - 100 * root.u) / 2 + 50 * root.u - height / 2
+            width: 200 * root.u; height: 120 * root.u
+            color: "#ffb35c"
+            strength: root.light ? 0.08 : 0.06 + 0.04 * root.level
+        }
+    ]
+
+    // One meter. The scale is the classic VU one: -20 .. +3, with 0 VU at about 70% of the arc and the red zone above
+    // it (here the accent).
+    component Meter: Item {
+        id: meter
+        property string channel
+        property real level: 0
+        readonly property real faceH: height - 2 * bezel
+        readonly property real bezel: 2.2 * root.u
+        // position of a dB value on the scale, 0..1
+        function pos(db) { return (Math.pow(10, db / 20) - 0.1) / (Math.pow(10, 3 / 20) - 0.1) }
+
+        Shadow { anchors.fill: parent; radius: 2.4 * root.u; strength: 0.7 }
+        // bezel
+        Rectangle {
+            anchors.fill: parent; radius: 2.4 * root.u
+            gradient: Gradient {
+                GradientStop { position: 0; color: root.light ? "#e9e9e7" : "#2e2e2e" }
+                GradientStop { position: 1; color: root.light ? "#c4c4c0" : "#151515" }
             }
-            if (any || root.capsL.length) { root.capsL = nl; root.capsR = nr }
+            border.color: root.light ? "#b5b5b0" : "#3a3a3a"; border.width: 1
+        }
+        // the face, lit from behind
+        Item {
+            id: face
+            x: meter.bezel; y: meter.bezel
+            width: meter.width - 2 * meter.bezel; height: meter.faceH
+            clip: true
+            Rectangle {
+                anchors.fill: parent; radius: 1.2 * root.u
+                gradient: Gradient {
+                    GradientStop { position: 0; color: "#f6eedb" }
+                    GradientStop { position: 0.7; color: "#efe2c3" }
+                    GradientStop { position: 1; color: "#e2d0a8" }
+                }
+            }
+            Canvas {
+                id: scale
+                anchors.fill: parent
+                property color red: root.accent
+                onRedChanged: requestPaint()
+                onWidthChanged: requestPaint()
+                onHeightChanged: requestPaint()
+                onPaint: {
+                    var c = getContext("2d")
+                    c.reset()
+                    var px = width / 2, py = height * 1.18, R = height * 0.88
+                    var a0 = -Math.PI / 2 - 0.7, a1 = -Math.PI / 2 + 0.7
+                    function ang(p) { return a0 + (a1 - a0) * p }
+                    var u = height / 46
+                    // arc: black up to 0 VU, a thick red band above
+                    c.lineWidth = Math.max(1, 0.28 * u)
+                    c.strokeStyle = "#2b2620"
+                    c.beginPath(); c.arc(px, py, R, ang(0), ang(meter.pos(0))); c.stroke()
+                    c.lineWidth = 1.6 * u
+                    c.strokeStyle = Qt.rgba(red.r, red.g, red.b, 1)
+                    c.beginPath(); c.arc(px, py, R + 0.65 * u, ang(meter.pos(0)), ang(1)); c.stroke()
+                    // ticks and figures
+                    var major = [-20, -10, -7, -5, -3, 0, 3], minor = [-2, -1, 1, 2]
+                    c.fillStyle = "#2b2620"
+                    c.textAlign = "center"
+                    c.textBaseline = "alphabetic"
+                    c.font = "500 " + Math.round(3.6 * u) + "px 'Inter Variable'"
+                    var all = major.concat(minor)
+                    for (var i = 0; i < all.length; i++) {
+                        var db = all[i], isMajor = major.indexOf(db) >= 0
+                        var a = ang(meter.pos(db))
+                        var r0 = R - (isMajor ? 3.2 : 2) * u, r1 = R
+                        c.strokeStyle = db > 0 ? Qt.rgba(red.r, red.g, red.b, 1) : "#2b2620"
+                        c.lineWidth = Math.max(1, (isMajor ? 0.32 : 0.22) * u)
+                        c.beginPath()
+                        c.moveTo(px + Math.cos(a) * r0, py + Math.sin(a) * r0)
+                        c.lineTo(px + Math.cos(a) * r1, py + Math.sin(a) * r1)
+                        c.stroke()
+                        if (isMajor) {
+                            var rt = R + 4.2 * u
+                            c.fillStyle = db > 0 ? Qt.rgba(red.r, red.g, red.b, 1) : "#2b2620"
+                            c.fillText(db > 0 ? "+" + db : "" + Math.abs(db), px + Math.cos(a) * rt, py + Math.sin(a) * rt + 1.2 * u)
+                        }
+                    }
+                    // the minus and plus signs at the ends, and the legend
+                    c.fillStyle = "#2b2620"
+                    c.font = "600 " + Math.round(3 * u) + "px 'Inter Variable'"
+                    c.fillText("−", px + Math.cos(a0) * (R - 7 * u), py + Math.sin(a0) * (R - 7 * u))
+                    c.fillStyle = Qt.rgba(red.r, red.g, red.b, 1)
+                    c.fillText("+", px + Math.cos(a1) * (R - 7 * u), py + Math.sin(a1) * (R - 7 * u))
+                    c.fillStyle = "#2b2620"
+                    c.font = "500 " + Math.round(7 * u) + "px 'Cormorant Garamond'"
+                    c.fillText("VU", px, height * 0.7)
+                }
+            }
+            IdleText {
+                x: 2.4 * root.u; y: face.height - height - 1.6 * root.u
+                text: meter.channel
+                color: "#2b2620"; size: 3 * root.u; weight: 700; tracking: 0.1
+            }
+            // the needle, pivoting below the face; it rests against the left stop in silence
+            Item {
+                x: face.width / 2; y: face.height * 1.18
+                Rectangle {
+                    id: needle
+                    x: -width / 2; y: -height
+                    width: Math.max(1, 0.32 * root.u); height: face.height * 1.06
+                    antialiasing: true
+                    color: "#1c1a17"
+                    transformOrigin: Item.Bottom
+                    rotation: -44 + 84 * Math.max(0, Math.min(1.04, meter.level))
+                    Behavior on rotation { SpringAnimation { spring: 2.2; damping: 0.32; mass: 1.2; epsilon: 0.05 } }
+                }
+            }
+            // the hub cover and the glass
+            Rectangle {
+                x: (face.width - width) / 2; y: face.height - height / 2
+                width: 14 * root.u; height: 9 * root.u; radius: height / 2
+                color: root.light ? "#3a3a3a" : "#1a1a1a"
+            }
+            Rectangle {
+                anchors.fill: parent; radius: 1.2 * root.u
+                gradient: Gradient {
+                    orientation: Gradient.Vertical
+                    GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 0.28) }
+                    GradientStop { position: 0.35; color: Qt.rgba(1, 1, 1, 0) }
+                    GradientStop { position: 0.85; color: Qt.rgba(0, 0, 0, 0) }
+                    GradientStop { position: 1; color: Qt.rgba(0, 0, 0, 0.12) }
+                }
+            }
         }
     }
 
-    background: [
-        Rectangle {
-            anchors.fill: parent
-            gradient: Gradient {
-                GradientStop { position: 0; color: "#1a1a1a" }
-                GradientStop { position: 1; color: "#080808" }
-            }
-        },
-        // The analyser: one bar per (side, index); on the left side index 0 is at the centre, bars run outwards.
-        Item {
-            x: 0; y: 0; width: root.width; height: root.height
-            layer.enabled: true
-            layer.smooth: true
-            layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 16 }
-            Repeater {
-                model: root.perSide * 2
-                Item {
-                    readonly property bool leftSide: index < root.perSide
-                    readonly property int k: leftSide ? index : index - root.perSide
-                    readonly property real v: root.at(leftSide ? root.bandsL : root.bandsR, root.posOf(k))
-                    readonly property var capArray: leftSide ? root.capsL : root.capsR
-                    readonly property real cap: capArray.length > k ? capArray[k] : 0
-                    // all 92 bars share the full window width with one constant gap, the centre included
-                    readonly property real slot: root.width / (root.perSide * 2)
-                    readonly property real gap: 0.5 * root.u
-                    width: slot - gap
-                    x: root.width / 2 + (leftSide ? -(k + 1) * slot : k * slot) + gap / 2
-                    height: root.maxBar
-                    y: root.sy + 98 * root.u - height
-
-                    Rectangle {
-                        width: parent.width
-                        height: Math.max(0.7 * root.u, parent.v * root.maxBar)
-                        y: parent.height - height
-                        radius: width / 2
-                        Behavior on height { NumberAnimation { duration: 60 } }
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: "#f2f2f2" }
-                            GradientStop { position: 1; color: "#5a5a5a" }
-                        }
-                        opacity: 0.85
-                    }
-                    Rectangle {
-                        width: parent.width; height: 0.5 * root.u; radius: height / 2
-                        y: parent.height - Math.max(0.7 * root.u, parent.cap * root.maxBar) - 1.6 * root.u
-                        color: "#f2f2f2"
-                        opacity: parent.cap > 0.02 ? 0.8 : 0
-                    }
-                }
-            }
-        },
-        Vignette { strength: 0.6 },
-        Grain { }
-    ]
+    Meter {
+        x: 112 * root.u; y: 12 * root.u
+        width: 78 * root.u; height: 52 * root.u
+        channel: "L"; level: root.levelL
+    }
+    Meter {
+        x: 194 * root.u; y: 12 * root.u
+        width: 78 * root.u; height: 52 * root.u
+        channel: "R"; level: root.levelR
+    }
+    // the amplifier's front panel under the meters: progress, then the controls under it
+    Progress {
+        id: bar
+        x: 112 * root.u; y: 68 * root.u
+        width: 160 * root.u
+        unit: root.u
+        theme: root
+        value: root.progress; playing: root.playing
+        leftText: root.elapsedText; rightText: root.remainingText
+    }
+    Controls {
+        x: 112 * root.u; y: bar.y + bar.height + 1.2 * root.u
+        width: 160 * root.u
+        unit: root.u
+        theme: root
+        align: Qt.AlignHCenter
+    }
 
     Cover {
-        x: 14 * root.u; y: 8 * root.u
-        width: 42 * root.u; height: width; radius: 2.2 * root.u; source: root.cover
+        x: 14 * root.u; y: 14 * root.u
+        width: 32 * root.u; height: width; radius: 1 * root.u
+        source: root.cover; shadowStrength: 0.6
     }
     TrackInfo {
-        x: 68 * root.u
-        y: 8 * root.u
-        width: 203 * root.u
-        unit: root.u; titleSize: 8.4
+        x: 14 * root.u
+        y: 86 * root.u - height + 0.9 * root.u
+        width: 84 * root.u
+        unit: root.u
+        showProgress: false
+        titleSize: 6.4
         title: root.title; artist: root.artist; playing: root.playing
         progress: root.progress; elapsedText: root.elapsedText; remainingText: root.remainingText
     }

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(qt_components Core Gui Widgets Network Qml Quick QuickControls2 Multimedia WebEngineCore WebEngineWidgets)
+set(qt_components Core Gui Widgets Network Qml Quick QuickControls2 Multimedia WebEngineCore WebEngineWidgets ShaderTools)
 # MPRIS (D-Bus) and the qt6ct theme follower exist on Linux only
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND qt_components DBus)

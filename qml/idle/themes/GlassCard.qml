@@ -1,67 +1,75 @@
 import QtQuick
-import QtQuick.Effects
 
+// A slab of liquid glass over the cover: the cover and the track sit on it like a card on a desk. The slab's middle
+// is frosted and tinted with the background color so the text reads; its rim stays clear and bends the cover's
+// shapes behind it, splitting their edges into a faint spectrum. The buttons are small lenses of the same glass,
+// refracting the slab and the cover under them.
 ThemeBase {
     id: root
 
+    // the stage's origin in the backdrop (ThemeBase centers the stage on whole pixels)
+    readonly property real stageX: Math.round((width - 286 * u) / 2)
+    readonly property real stageY: Math.round((height - 100 * u) / 2)
+
     background: [
-        BlurBackdrop { anchors.fill: parent; source: root.cover; brightness: -0.3; contrast: 0.15 },
-        // drifting light patches give the glass something to refract
         Item {
+            id: scene
             anchors.fill: parent
-            layer.enabled: true
-            layer.smooth: true
-            layer.textureSize: Qt.size(Math.max(1, root.width / 8), Math.max(1, root.height / 8))
-            layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 64 }
-            Rectangle {
-                width: 80 * root.u; height: width; radius: width / 2; color: "white"; opacity: 0.09
-                x: root.width * (0.22 + 0.12 * Math.sin(root.t)) - width / 2
-                y: root.height * (0.35 + 0.25 * Math.cos(root.t * 2)) - height / 2
+            Item {
+                id: wall
+                anchors.fill: parent
+                // the cover itself, large and only softly blurred, so its shapes are there for the glass to bend
+                BlurBackdrop {
+                    anchors.fill: parent; source: root.cover
+                    detail: 96; blurMax: 3; copies: 1
+                    veil: root.light ? 0.22 : 0.18; saturation: 0.15
+                }
             }
-            Rectangle {
-                width: 70 * root.u; height: width; radius: width / 2; color: "white"; opacity: 0.07
-                x: root.width * (0.8 + 0.1 * Math.cos(root.t * 2)) - width / 2
-                y: root.height * (0.7 + 0.2 * Math.sin(root.t)) - height / 2
+            // the slab lives in the backdrop, so the buttons' lenses can refract it
+            LiquidGlass {
+                x: root.stageX + card.x; y: root.stageY + card.y
+                width: card.width; height: card.height
+                source: wallSource
+                radius: 5 * root.u
+                bezel: 5 * root.u
+                thickness: 6 * root.u
+                frost: 1; clearRim: 1
+                tint: root.alpha(root.bg, root.light ? 0.22 : 0.2)
+                saturation: 1.2
+                brightness: root.light ? 1.04 : 0.92
+                rimLight: root.light ? 1.0 : 0.8
+                shadowOpacity: root.light ? 0.1 : 0.24
+                shadowRadius: 5 * root.u
+                shadowOffset: 1.4 * root.u
             }
-        },
-        Vignette { strength: 0.55 },
-        Grain { }
+        }
     ]
+
+    // the backdrop drifts slowly: 30 captures a second are enough for the glass
+    GlassSource { id: wallSource; sourceItem: wall; blurEnabled: true; blurRadius: 48; fps: 30 }
+    GlassSource { id: sceneSource; sourceItem: scene; fps: 30 }
 
     Item {
         id: card
-        x: 12 * root.u
-        y: 12 * root.u
-        width: 262 * root.u
-        height: 76 * root.u
+        x: 11 * root.u; y: 11 * root.u
+        width: 264 * root.u; height: 78 * root.u
 
-        Shadow { anchors.fill: parent; radius: 6 * root.u; offsetY: 3 * root.u; strength: 0.55 }
-        Rectangle {
-            anchors.fill: parent
-            radius: 6 * root.u
-            border.width: 1
-            border.color: "#40ffffff"
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#30ffffff" }
-                GradientStop { position: 0.5; color: "#16ffffff" }
-                GradientStop { position: 1.0; color: "#0affffff" }
-            }
+        Cover {
+            x: 8 * root.u; y: 8 * root.u
+            width: 62 * root.u; height: width
+            radius: 2.2 * root.u
+            source: root.cover
+            shadowStrength: 0.5
         }
-        Rectangle {
-            x: 8 * root.u; y: 1; width: parent.width - 16 * root.u; height: 1
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: "#00ffffff" }
-                GradientStop { position: 0.5; color: "#99ffffff" }
-                GradientStop { position: 1.0; color: "#00ffffff" }
-            }
-        }
-        Cover { x: 7 * root.u; y: 7 * root.u; width: 62 * root.u; height: width; radius: 3.2 * root.u; source: root.cover }
         TrackInfo {
-            x: 80 * root.u
-            y: (card.height - height) / 2
-            width: card.width - 80 * root.u - 12 * root.u
+            x: 82 * root.u
+            y: (card.height - height) / 2 + 0.6 * root.u
+            width: card.width - 82 * root.u - 12 * root.u
             unit: root.u
+            theme: root
+            glass: true
+            glassSource: sceneSource
+            titleSize: 9
             title: root.title; artist: root.artist; playing: root.playing
             progress: root.progress; elapsedText: root.elapsedText; remainingText: root.remainingText
         }

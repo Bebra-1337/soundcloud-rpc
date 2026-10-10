@@ -1,31 +1,61 @@
 import QtQuick
 
+// Poster: the title set as large as it fits, flush left and bottom, the artist in italic serif under it, the cover
+// as a plate in the corner and one rule of progress along the foot.
 ThemeBase {
     id: root
 
     background: [
-        BlurBackdrop { anchors.fill: parent; source: root.cover; brightness: -0.6; contrast: 0.1 },
-        Column {
-            y: (root.height - height) / 2
-            width: root.width
-            Marquee { width: parent.width; text: root.title.toUpperCase(); px: 26 * root.u; dir: -1; loopMs: 46000; color: "#f2f2f2" }
-            Marquee { width: parent.width; text: root.artist.toUpperCase(); px: 26 * root.u; dir: 1; loopMs: 62000; color: "#bdbdbd"; outline: true }
-            Marquee { width: parent.width; text: root.title.toUpperCase(); px: 26 * root.u; dir: -1; loopMs: 80000; color: "#5a5a5a" }
-        },
-        Vignette { strength: 0.7 },
-        Grain { }
+        Rectangle { anchors.fill: parent; color: root.bg }
     ]
 
-    Rectangle {
-        x: 14 * root.u; y: 62 * root.u
-        width: 112 * root.u; height: 30 * root.u; radius: 3 * root.u
-        color: "#ee0f0f0f"; border.color: "#33ffffff"
-        Cover { x: 4 * root.u; y: 4 * root.u; width: 22 * root.u; height: width; radius: 1.6 * root.u; source: root.cover; shadow: false }
-        Column {
-            x: 31 * root.u; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 36 * root.u
-            spacing: 0.6 * root.u
-            Text { text: root.remainingText; color: root.ink; font.pixelSize: 9 * root.u; font.family: "monospace"; font.weight: Font.Bold }
-            Progress { width: parent.width; unit: root.u; value: root.progress; labels: false }
-        }
+    IdleText {
+        id: headline
+        x: 14 * root.u; y: 10 * root.u
+        width: 190 * root.u; height: 46 * root.u
+        text: root.title || qsTr("Nothing playing")
+        size: 30 * root.u
+        fontSizeMode: Text.Fit
+        minimumPixelSize: Math.round(8 * root.u)
+        weight: 720
+        tracking: -0.032
+        lineHeight: 0.88
+        wrapMode: Text.WordWrap
+        maximumLineCount: 3
+        elide: Text.ElideRight
+        verticalAlignment: Text.AlignBottom
+    }
+    IdleText {
+        x: 14 * root.u
+        anchors.top: headline.bottom
+        anchors.topMargin: 2 * root.u
+        width: 190 * root.u
+        text: root.artist
+        serif: true
+        font.italic: true
+        size: 9 * root.u
+        color: root.alpha(root.ink, 0.7)
+        elide: Text.ElideRight
+    }
+    Cover {
+        x: 214 * root.u; y: 10 * root.u
+        width: 58 * root.u; height: width; radius: 0.8 * root.u
+        source: root.cover; shadowStrength: 0.5
+    }
+    // progress, then the controls under it (the same order in every theme)
+    Progress {
+        id: bar
+        x: 14 * root.u; y: 72 * root.u
+        width: 258 * root.u
+        unit: root.u
+        thickness: Math.max(1, Math.round(0.35 * root.u))
+        value: root.progress; playing: root.playing; theme: root
+        leftText: root.elapsedText; rightText: root.remainingText
+    }
+    Controls {
+        x: 14 * root.u; y: bar.y + bar.height + 1.2 * root.u
+        width: 190 * root.u
+        unit: root.u
+        theme: root
     }
 }

@@ -1,5 +1,6 @@
 // Standalone gallery of the idle-screen themes with fake data:
 // soundcloud-rpc-preview [--shots DIR] [--cover FILE] [--size WxH] [--fixed] [--only Theme,Theme] [--music] [--fps]
+//                        [--palette dark|light|system] [--long] [--no-cover] [--paused] [--pos SECONDS] [--dur SECONDS]
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
@@ -40,7 +41,17 @@ int main(int argc, char *argv[])
         {QStringLiteral("themeFilter"), option(args, QStringLiteral("--only"))},
         {QStringLiteral("fakeAudio"), args.contains(QStringLiteral("--music"))},
         {QStringLiteral("showFps"), args.contains(QStringLiteral("--fps"))},
+        {QStringLiteral("longTitle"), args.contains(QStringLiteral("--long"))},
+        {QStringLiteral("noCover"), args.contains(QStringLiteral("--no-cover"))},
+        {QStringLiteral("playing"), !args.contains(QStringLiteral("--paused"))},
+        {QStringLiteral("paletteName"), option(args, QStringLiteral("--palette"), QStringLiteral("dark"))},
     };
+    const QString pos = option(args, QStringLiteral("--pos"));
+    if (!pos.isEmpty())
+        props[QStringLiteral("pos")] = pos.toDouble();
+    const QString dur = option(args, QStringLiteral("--dur"));
+    if (!dur.isEmpty())
+        props[QStringLiteral("dur")] = dur.toDouble();
     const QString cover = option(args, QStringLiteral("--cover"));
     if (!cover.isEmpty())
         props[QStringLiteral("coverUrl")] = QUrl::fromLocalFile(cover);

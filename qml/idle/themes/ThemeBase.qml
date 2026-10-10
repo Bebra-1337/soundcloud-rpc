@@ -15,18 +15,49 @@ Item {
     property real duration: 1
     property bool playing: true
 
+    // The player's state for the controls, and the requests they make (the host passes them to the app). Calling
+    // one marks the screen as in use, so one opened by the idle timer no longer closes when the music pauses.
+    property bool liked: false
+    property bool shuffle: false
+    property int repeatMode: 0        // 0 off, 1 all, 2 one
+    property real volume: 1
+    property bool muted: false
+    signal requestTogglePlay()
+    signal requestNext()
+    signal requestPrevious()
+    signal requestSeek(real seconds)
+    signal requestLike()
+    signal requestShuffle()
+    signal requestRepeat()
+    signal requestVolume(real value)
+    signal requestMute()
+
     readonly property real remaining: Math.max(0, duration - position)
     readonly property real progress: duration > 0 ? Math.min(1, position / duration) : 0
     readonly property string elapsedText: fmt(position)
     readonly property string remainingText: "-" + fmt(remaining)
     readonly property real u: Math.max(0.1, Math.min(width / 286, height / 100))
 
-    // Monochrome palette (noctalia "Monochrome"); the cover is the only color on screen.
-    readonly property color ink: "#f2f2f2"
-    readonly property color inkDim: "#a3a3a3"
-    readonly property color inkFaint: "#6b6b6b"
-    readonly property color surface: "#111111"
-    readonly property color outline: "#3c3c3c"
+    // Colors come from the inherited palette (set by IdleScreen from the app's scheme): background, text and
+    // accent, and mixes between them, so every theme works on dark and light schemes alike. The cover stays
+    // the main color on screen; the accent marks progress and the music. Physical objects (a vinyl record,
+    // paper, a cassette label) keep their own colors.
+    function mix(a, b, t) { a = Qt.color(a); b = Qt.color(b); return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1) }
+    function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
+    readonly property color bg: palette.window
+    readonly property color ink: palette.windowText
+    readonly property color accent: palette.accent
+    readonly property color onAccent: palette.highlightedText
+    readonly property color shade: palette.shadow
+    readonly property bool light: 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b > 0.45
+    readonly property color inkDim: mix(ink, bg, 0.32)
+    readonly property color inkFaint: mix(ink, bg, 0.58)
+    readonly property color surface: mix(bg, ink, 0.05)
+    readonly property color raised: mix(bg, ink, 0.1)
+    readonly property color outline: mix(bg, ink, 0.2)
+    // a darker / lighter tone of the background for gradients (the far end of a sky, the floor)
+    readonly property color deep: light ? mix(bg, ink, 0.07) : mix(bg, "#000000", 0.55)
+    readonly property color lift: light ? mix(bg, "#ffffff", 0.6) : mix(bg, ink, 0.07)
 
     // Audio (raw 0..1 band levels from the page's analyser, ~30 per second; all zero when there is no signal).
     // The raw levels sit high and move little (bass is ~0.5-0.8 for most of a track), so they are normalised

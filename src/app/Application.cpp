@@ -89,12 +89,15 @@ static constexpr int kCacheLimitMin = 50;
 static constexpr int kCacheLimitMax = 2000;
 
 static const QString kDefaultIdleTheme = QStringLiteral("GlassCard");
+// The keys are stored in the settings and name the theme files; several themes were redesigned under a new label
+// (Particles is Bokeh, Equalizer Spectrum, Stereo VU Meters, Typography Poster, Neon Horizon, AlbumWall Big Cover,
+// Starfield Ripple, BlurCover Ambient) and keep their old key so a saved choice still applies.
 static const std::pair<const char *, const char *> kIdleThemes[] = {
-    {"GlassCard", QT_TRANSLATE_NOOP("Application", "Glass Card")},       {"BlurCover", QT_TRANSLATE_NOOP("Application", "Blur Cover")},  {"Aurora", QT_TRANSLATE_NOOP("Application", "Aurora")},
-    {"Vinyl", QT_TRANSLATE_NOOP("Application", "Vinyl")},                {"Cassette", QT_TRANSLATE_NOOP("Application", "Cassette")},     {"Particles", QT_TRANSLATE_NOOP("Application", "Particles")},
-    {"Equalizer", QT_TRANSLATE_NOOP("Application", "Equalizer")},        {"Stereo", QT_TRANSLATE_NOOP("Application", "Stereo Mirror")},   {"Polaroid", QT_TRANSLATE_NOOP("Application", "Polaroid")},
-    {"MinimalClock", QT_TRANSLATE_NOOP("Application", "Minimal Clock")}, {"Typography", QT_TRANSLATE_NOOP("Application", "Typography")}, {"Neon", QT_TRANSLATE_NOOP("Application", "Neon")},
-    {"AlbumWall", QT_TRANSLATE_NOOP("Application", "Album Wall")},       {"Orbit", QT_TRANSLATE_NOOP("Application", "Orbit")},        {"Starfield", QT_TRANSLATE_NOOP("Application", "Starfield")},
+    {"GlassCard", QT_TRANSLATE_NOOP("Application", "Glass Card")},       {"BlurCover", QT_TRANSLATE_NOOP("Application", "Ambient")},  {"Aurora", QT_TRANSLATE_NOOP("Application", "Aurora")},
+    {"Vinyl", QT_TRANSLATE_NOOP("Application", "Vinyl")},                {"Cassette", QT_TRANSLATE_NOOP("Application", "Cassette")},     {"Particles", QT_TRANSLATE_NOOP("Application", "Bokeh")},
+    {"Equalizer", QT_TRANSLATE_NOOP("Application", "Spectrum")},        {"Stereo", QT_TRANSLATE_NOOP("Application", "VU Meters")},   {"Polaroid", QT_TRANSLATE_NOOP("Application", "Polaroid")},
+    {"MinimalClock", QT_TRANSLATE_NOOP("Application", "Minimal Clock")}, {"Typography", QT_TRANSLATE_NOOP("Application", "Poster")}, {"Neon", QT_TRANSLATE_NOOP("Application", "Horizon")},
+    {"AlbumWall", QT_TRANSLATE_NOOP("Application", "Big Cover")},       {"Orbit", QT_TRANSLATE_NOOP("Application", "Orbit")},        {"Starfield", QT_TRANSLATE_NOOP("Application", "Ripple")},
 };
 
 static bool isKnownTheme(const QString &key)

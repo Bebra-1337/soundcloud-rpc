@@ -1,47 +1,34 @@
 import QtQuick
 
-// Small letterspaced "NOW PLAYING" eyebrow with a mini equalizer that moves while playing.
+// Small letterspaced status label ("Now playing" / "Paused") after an accent dot that is filled while playing.
 Item {
     id: np
     property real unit: 5
     property bool playing: true
     property int align: Text.AlignLeft
-    property color color: "#a3a3a3"
+    property color color: Qt.rgba(palette.windowText.r, palette.windowText.g, palette.windowText.b, 0.6)
 
     height: unit * 3
 
     Row {
-        spacing: np.unit * 0.9
+        spacing: np.unit * 1.2
         anchors.verticalCenter: parent.verticalCenter
         x: np.align === Text.AlignRight ? np.width - width : (np.align === Text.AlignHCenter ? (np.width - width) / 2 : 0)
-
-        Item {
-            width: np.unit * 2.6; height: np.unit * 2.2
+        Rectangle {
             anchors.verticalCenter: parent.verticalCenter
-            Repeater {
-                model: 3
-                Rectangle {
-                    width: np.unit * 0.55; radius: width / 2; color: np.color
-                    x: index * np.unit * 0.95
-                    anchors.bottom: parent.bottom
-                    height: np.unit * 0.7
-                    SequentialAnimation on height {
-                        running: np.playing
-                        loops: Animation.Infinite
-                        NumberAnimation { to: np.unit * (1.3 + index * 0.4); duration: 360 + index * 140; easing.type: Easing.InOutSine }
-                        NumberAnimation { to: np.unit * 0.7; duration: 420 + index * 90; easing.type: Easing.InOutSine }
-                    }
-                }
-            }
+            width: np.unit * 1.1; height: width; radius: width / 2
+            color: np.playing ? palette.accent : "transparent"
+            border.color: np.playing ? palette.accent : np.color
+            border.width: Math.max(1, np.unit * 0.2)
         }
-        Text {
+        IdleText {
             anchors.verticalCenter: parent.verticalCenter
             text: np.playing ? qsTr("Now playing") : qsTr("Paused")
             color: np.color
-            font.pixelSize: np.unit * 2.3
+            size: np.unit * 2.4
             font.capitalization: Font.AllUppercase
-            font.letterSpacing: np.unit * 0.45
-            font.weight: Font.Medium
+            weight: 600
+            tracking: 0.14
         }
     }
 }

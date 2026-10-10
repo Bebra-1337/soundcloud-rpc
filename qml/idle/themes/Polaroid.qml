@@ -1,77 +1,94 @@
 import QtQuick
-import QtQuick.Effects
 
+// Polaroid: the cover as an instant photo taped to a wall lit from the side, its caption written by hand; beside it
+// the title set like a magazine headline in a serif.
 ThemeBase {
     id: root
 
     background: [
-        BlurBackdrop { anchors.fill: parent; source: root.cover; brightness: -0.55; contrast: -0.1 },
-        // spotlight on the wall behind the photo
-        Rectangle {
-            x: root.width * 0.2 - width / 2; y: root.height / 2 - height / 2
-            width: 110 * root.u; height: width; radius: width / 2; color: "white"; opacity: 0.16
-            layer.enabled: true; layer.smooth: true
-            layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 64 }
-        },
-        Vignette { strength: 0.75 },
-        Grain { amount: 0.14 }
+        BlurBackdrop { anchors.fill: parent; source: root.cover; veil: root.light ? 0.72 : 0.7; saturation: -0.35; animated: false },
+        // light falling on the wall from the upper left
+        Glow {
+            x: (root.width - 286 * root.u) / 2 - 50 * root.u; y: (root.height - 100 * root.u) / 2 - 80 * root.u
+            width: 240 * root.u; height: 220 * root.u
+            color: root.light ? "#ffffff" : "#fff3dc"
+            strength: root.light ? 0.6 : 0.09
+        }
     ]
 
     Item {
         id: photo
-        x: 24 * root.u; y: 8 * root.u
-        width: 66 * root.u; height: 84 * root.u
-        transformOrigin: Item.Top
-        rotation: -4
-        SequentialAnimation on rotation {
-            loops: Animation.Infinite
-            NumberAnimation { to: 2.5; duration: 8000; easing.type: Easing.InOutSine }
-            NumberAnimation { to: -4; duration: 8000; easing.type: Easing.InOutSine }
-        }
-        Shadow { anchors.fill: parent; radius: 0.6 * root.u; offsetY: 2 * root.u; strength: 0.7 }
-        // The sheet (paper, photo, caption) is pre-rendered into a 2x texture and only that texture swings, which
-        // keeps the edges smooth; rotating the live items showed ragged edges.
+        x: 22 * root.u; y: 9 * root.u
+        width: 64 * root.u; height: 80 * root.u
+        rotation: -3
+        antialiasing: true
+
+        Shadow { anchors.fill: parent; radius: 0.4 * root.u; strength: 0.75; offsetY: 2.2 * root.u }
+        // The sheet (paper, photo, caption) is pre-rendered into a 2x texture and only that texture is turned, which
+        // keeps the edges smooth.
         Item {
             anchors.fill: parent
             layer.enabled: true
             layer.smooth: true
             layer.mipmap: true
+            layer.samples: 4
             layer.textureSize: Qt.size(width * 2, height * 2)
-            Rectangle { anchors.fill: parent; color: "#e4e2dd"; radius: 0.6 * root.u }
-            Cover { x: 4 * root.u; y: 4 * root.u; width: parent.width - 8 * root.u; height: width; source: root.cover; shadow: false }
-            Text {
-                x: 5 * root.u; y: 66 * root.u; width: parent.width - 10 * root.u
-                text: root.title || "Nothing playing"; color: "#202020"; elide: Text.ElideRight
-                font.pixelSize: 4.6 * root.u; font.italic: true; font.family: "serif"; font.weight: Font.DemiBold
+            Rectangle {
+                anchors.fill: parent; radius: 0.4 * root.u
+                gradient: Gradient {
+                    GradientStop { position: 0; color: "#f8f6f1" }
+                    GradientStop { position: 1; color: "#ebe8e0" }
+                }
             }
-            Text {
-                x: 5 * root.u; y: 73.5 * root.u; width: parent.width - 10 * root.u
-                text: root.artist; color: "#6a6a6a"; elide: Text.ElideRight
-                font.pixelSize: 3.4 * root.u; font.italic: true; font.family: "serif"
+            Cover {
+                x: 3.6 * root.u; y: 3.6 * root.u
+                width: parent.width - 7.2 * root.u; height: width
+                source: root.cover; shadow: false
+            }
+            // the photo sits slightly under the paper's surface
+            Rectangle {
+                x: 3.6 * root.u; y: 3.6 * root.u
+                width: parent.width - 7.2 * root.u; height: width
+                color: "transparent"; border.color: Qt.rgba(0, 0, 0, 0.12); border.width: 1
+            }
+            IdleText {
+                x: 5 * root.u; y: 64 * root.u; width: parent.width - 10 * root.u
+                text: root.title || qsTr("Nothing playing")
+                serif: true; font.italic: true
+                size: 5.4 * root.u
+                color: "#2a2b30"
+                elide: Text.ElideRight
+            }
+            IdleText {
+                x: 5 * root.u; y: 70.5 * root.u; width: parent.width - 10 * root.u
+                text: root.artist
+                serif: true; font.italic: true
+                size: 3.8 * root.u
+                color: "#5c5d63"
+                elide: Text.ElideRight
             }
         }
-        // masking tape
+        // a strip of paper tape
         Rectangle {
-            x: parent.width / 2 - 11 * root.u; y: -3 * root.u; width: 22 * root.u; height: 7 * root.u
-            color: "#a8d4d4d4"; rotation: 3
+            x: parent.width / 2 - 10 * root.u; y: -3.2 * root.u
+            width: 20 * root.u; height: 6.4 * root.u
+            rotation: 4
+            antialiasing: true
+            color: Qt.rgba(0.93, 0.91, 0.85, 0.82)
+            border.color: Qt.rgba(0, 0, 0, 0.05); border.width: 1
         }
     }
 
-    Column {
-        x: 112 * root.u; width: 161 * root.u
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: 1.6 * root.u
-        NowPlaying { width: parent.width; unit: root.u; playing: root.playing }
-        Text {
-            width: parent.width; text: root.title || "Nothing playing"; color: root.ink
-            wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; lineHeight: 0.95
-            font.pixelSize: 10.5 * root.u; font.italic: true; font.family: "serif"; font.weight: Font.DemiBold
-        }
-        Text {
-            width: parent.width; text: root.artist.toUpperCase(); color: root.inkDim; visible: text !== ""
-            elide: Text.ElideRight; font.pixelSize: 3.6 * root.u; font.letterSpacing: 0.9 * root.u
-        }
-        Item { width: 1; height: 1.4 * root.u }
-        Progress { width: parent.width; unit: root.u; value: root.progress; leftText: root.elapsedText; rightText: root.remainingText }
+    TrackInfo {
+        x: 108 * root.u
+        y: (100 * root.u - height) / 2
+        width: 164 * root.u
+        unit: root.u
+        theme: root
+        serif: true
+        titleWeight: 500
+        titleSize: 13.5
+        title: root.title; artist: root.artist; playing: root.playing
+        progress: root.progress; elapsedText: root.elapsedText; remainingText: root.remainingText
     }
 }
