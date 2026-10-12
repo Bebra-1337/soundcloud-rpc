@@ -1,7 +1,8 @@
 import QtQuick
 
 // A round icon button for the idle themes: 44 px of hit area at the reference size, a quiet glyph that brightens
-// under the pointer with a soft disc behind it, the accent when it is on (liked, shuffle, repeat). `primary` is
+// under the pointer with a soft disc behind it, the accent when it is on (liked, shuffle, repeat; toggles that
+// are not `filled` also get a dot under the glyph). `primary` is
 // the play button: an accent disc with the glyph in the accent's text color. `glass` makes the disc a pane of
 // frosted glass (a light rim and a highlight along the top; the play button tinted with the accent), for themes
 // built of glass, or with `glassSource` a lens of liquid glass.
@@ -164,6 +165,19 @@ Item {
             color: palette.accent
             size: 2.2 * b.unit
             weight: 800
+        }
+        // an "on" dot under a toggle's glyph (shuffle, repeat): the accent alone can be a gray barely apart
+        // from the text color (monochrome schemes), so the state must not depend on the hue
+        Rectangle {
+            readonly property bool on: b.active && !b.filled && !b.primary
+            width: 0.9 * b.unit
+            height: width
+            radius: width / 2
+            x: Math.round((b.width - width) / 2)
+            y: Math.round(b.height * 0.86 - height / 2)
+            color: palette.accent
+            opacity: on ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 140 } }
         }
     }
     MouseArea {
