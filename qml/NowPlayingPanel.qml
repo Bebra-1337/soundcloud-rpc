@@ -55,10 +55,13 @@ Rectangle {
         anchors.margins: 20
         visible: Player.hasTrack
 
-        readonly property real coverSize: Math.max(80, Math.min(width, height - 270))
+        // the cover takes whatever height the controls leave; the whole block is centered vertically,
+        // so at the 500 px banner it runs from the top margin to the bottom one
+        readonly property real coverSize: Math.max(80, Math.min(width, height - controls.height - 14))
 
         ArtImage {
             id: cover
+            y: Math.max(0, Math.round((content.height - content.coverSize - 14 - controls.height) / 2))
             anchors.horizontalCenter: parent.horizontalCenter
             width: content.coverSize
             height: content.coverSize
@@ -95,205 +98,215 @@ Rectangle {
             }
         }
 
-        Column {
-            id: titles
+        Item {
+            id: controls
             anchors.top: cover.bottom
             anchors.topMargin: 14
             width: parent.width
-            spacing: 3
-            Text {
+            height: bottomRow.y + bottomRow.height
+
+            Column {
+                id: titles
                 width: parent.width
-                text: panel.track.title || ""
-                color: Style.ink
-                font.pixelSize: 17
-                font.weight: Font.Bold
-                elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
-            }
-            Text {
-                width: parent.width
-                text: panel.track.artist || ""
-                color: artistHover.hovered ? Style.ink : Style.inkDim
-                font.pixelSize: 13
-                elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
-                HoverHandler { id: artistHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: panel.openArtist() }
-            }
-        }
-
-        Waveform {
-            id: wave
-            anchors.top: titles.bottom
-            anchors.topMargin: 12
-            width: parent.width
-            height: 34
-        }
-        Item {
-            id: times
-            anchors.top: wave.bottom
-            anchors.topMargin: 4
-            width: parent.width
-            height: 14
-            Text {
-                text: Style.fmtTime(wave.dragProgress >= 0 ? wave.dragProgress * Player.duration : Player.position)
-                color: Style.inkDim
-                font.pixelSize: 11
-                font.features: { "tnum": 1 }
-            }
-            Text {
-                anchors.right: parent.right
-                text: Style.fmtTime(Player.duration)
-                color: Style.inkFaint
-                font.pixelSize: 11
-                font.features: { "tnum": 1 }
-            }
-        }
-
-        Row {
-            id: transport
-            anchors.top: times.bottom
-            anchors.topMargin: 6
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 10
-
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                icon: "shuffle"
-                active: Player.shuffle
-                color: Style.inkFaint
-                tip: Player.shuffle ? qsTr("Shuffle on") : qsTr("Shuffle off")
-                onClicked: Player.shuffle = !Player.shuffle
-            }
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                icon: "prev"
-                color: Style.ink
-                tip: qsTr("Previous")
-                onClicked: Player.previous()
-            }
-            Rectangle {
-                width: 50
-                height: 50
-                radius: 25
-                color: playHover.hovered ? Style.accentHover : Style.accent
-                scale: playTap.pressed ? 0.94 : 1
-                Behavior on scale { NumberAnimation { duration: 90 } }
-                Icon {
-                    anchors.centerIn: parent
-                    anchors.horizontalCenterOffset: Player.playing ? 0 : 1
-                    name: Player.playing ? "pause" : "play"
-                    size: 22
-                    color: Style.onAccent
-                }
-                Spinner {
-                    anchors.fill: parent
-                    anchors.margins: -5
-                    visible: Player.loading
-                    lineWidth: 2
-                    color: Style.accent
-                }
-                HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { id: playTap; onTapped: Player.togglePlay() }
-            }
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                icon: "next"
-                color: Style.ink
-                tip: qsTr("Next")
-                onClicked: Player.next()
-            }
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                icon: "repeat"
-                active: Player.repeatMode !== 0
-                color: Style.inkFaint
-                tip: [qsTr("Repeat off"), qsTr("Repeat all"), qsTr("Repeat one")][Player.repeatMode]
-                onClicked: Player.cycleRepeat()
+                spacing: 3
                 Text {
-                    visible: Player.repeatMode === 2
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.margins: 3
-                    text: "1"
-                    color: Style.accent
-                    font.pixelSize: 9
+                    width: parent.width
+                    text: panel.track.title || ""
+                    color: Style.ink
+                    font.pixelSize: 17
                     font.weight: Font.Bold
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                Text {
+                    width: parent.width
+                    text: panel.track.artist || ""
+                    color: artistHover.hovered ? Style.ink : Style.inkDim
+                    font.pixelSize: 13
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                    HoverHandler { id: artistHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: panel.openArtist() }
                 }
             }
-        }
 
-        Row {
-            anchors.top: transport.bottom
-            anchors.topMargin: 6
-            width: parent.width
-            spacing: 2
+            Waveform {
+                id: wave
+                anchors.top: titles.bottom
+                anchors.topMargin: 12
+                width: parent.width
+                height: 34
+            }
+            Item {
+                id: times
+                anchors.top: wave.bottom
+                anchors.topMargin: 4
+                width: parent.width
+                height: 14
+                Text {
+                    text: Style.fmtTime(wave.dragProgress >= 0 ? wave.dragProgress * Player.duration : Player.position)
+                    color: Style.inkDim
+                    font.pixelSize: 11
+                    font.features: { "tnum": 1 }
+                }
+                Text {
+                    anchors.right: parent.right
+                    text: Style.fmtTime(Player.duration)
+                    color: Style.inkFaint
+                    font.pixelSize: 11
+                    font.features: { "tnum": 1 }
+                }
+            }
 
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                size: 32
-                iconSize: 18
-                icon: "heart"
-                filled: panel.liked
-                active: panel.liked
-                tip: panel.liked ? qsTr("Unlike") : qsTr("Like")
-                onClicked: Api.setLiked(panel.track.id, !panel.liked)
-            }
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                size: 32
-                iconSize: 18
-                icon: "queue"
-                tip: qsTr("Queue")
-                onClicked: panel.openQueue()
-            }
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                size: 32
-                iconSize: 18
-                icon: "screen"
-                tip: qsTr("Idle screen")
-                onClicked: App.showIdle()
-            }
-            Item { width: parent.width - 32 * 4 - 2 * 4 - volume.width; height: 1 }
-            IconButton {
-                anchors.verticalCenter: parent.verticalCenter
-                size: 32
-                iconSize: 18
-                icon: Player.muted || Player.volume === 0 ? "mute" : (Player.volume < 0.5 ? "volumeLow" : "volume")
-                tip: Player.muted ? qsTr("Unmute") : qsTr("Mute")
-                onClicked: Player.muted = !Player.muted
-            }
-            Slider {
-                id: volume
-                anchors.verticalCenter: parent.verticalCenter
-                width: 96
-                from: 0
-                to: 1
-                value: Player.volume
-                onMoved: { Player.volume = value; Player.muted = false }
-                background: Rectangle {
-                    x: volume.leftPadding
-                    y: volume.topPadding + volume.availableHeight / 2 - height / 2
-                    width: volume.availableWidth
-                    height: 3
-                    radius: 2
-                    color: Style.outline
-                    Rectangle {
-                        width: volume.visualPosition * parent.width
-                        height: parent.height
-                        radius: 2
-                        color: Player.muted ? Style.inkFaint : Style.accent
+            Row {
+                id: transport
+                anchors.top: times.bottom
+                anchors.topMargin: 6
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 10
+
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon: "shuffle"
+                    active: Player.shuffle
+                    color: Style.inkFaint
+                    tip: Player.shuffle ? qsTr("Shuffle on") : qsTr("Shuffle off")
+                    onClicked: Player.shuffle = !Player.shuffle
+                }
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon: "prev"
+                    color: Style.ink
+                    tip: qsTr("Previous")
+                    onClicked: Player.previous()
+                }
+                Rectangle {
+                    width: 50
+                    height: 50
+                    radius: 25
+                    color: playHover.hovered ? Style.accentHover : Style.accent
+                    scale: playTap.pressed ? 0.94 : 1
+                    Behavior on scale { NumberAnimation { duration: 90 } }
+                    Icon {
+                        anchors.centerIn: parent
+                        anchors.horizontalCenterOffset: Player.playing ? 0 : 1
+                        name: Player.playing ? "pause" : "play"
+                        size: 22
+                        color: Style.onAccent
+                    }
+                    Spinner {
+                        anchors.fill: parent
+                        anchors.margins: -5
+                        visible: Player.loading
+                        lineWidth: 2
+                        color: Style.accent
+                    }
+                    HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { id: playTap; onTapped: Player.togglePlay() }
+                }
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon: "next"
+                    color: Style.ink
+                    tip: qsTr("Next")
+                    onClicked: Player.next()
+                }
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon: "repeat"
+                    active: Player.repeatMode !== 0
+                    color: Style.inkFaint
+                    tip: [qsTr("Repeat off"), qsTr("Repeat all"), qsTr("Repeat one")][Player.repeatMode]
+                    onClicked: Player.cycleRepeat()
+                    Text {
+                        visible: Player.repeatMode === 2
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: 3
+                        text: "1"
+                        color: Style.accent
+                        font.pixelSize: 9
+                        font.weight: Font.Bold
                     }
                 }
-                handle: Rectangle {
-                    x: volume.leftPadding + volume.visualPosition * (volume.availableWidth - width)
-                    y: volume.topPadding + volume.availableHeight / 2 - height / 2
-                    width: 12
-                    height: 12
-                    radius: 6
-                    color: Style.accent
-                    visible: volume.hovered || volume.pressed
+            }
+
+            // secondary buttons: shifted so the glyphs, not the buttons' hover areas, line up with the waveform's edges
+            Row {
+                id: bottomRow
+                anchors.top: transport.bottom
+                anchors.topMargin: 6
+                x: -7
+                width: parent.width + 7
+                spacing: 2
+
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: 32
+                    iconSize: 18
+                    icon: "heart"
+                    filled: panel.liked
+                    active: panel.liked
+                    tip: panel.liked ? qsTr("Unlike") : qsTr("Like")
+                    onClicked: Api.setLiked(panel.track.id, !panel.liked)
+                }
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: 32
+                    iconSize: 18
+                    icon: "queue"
+                    tip: qsTr("Queue")
+                    onClicked: panel.openQueue()
+                }
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: 32
+                    iconSize: 18
+                    icon: "screen"
+                    tip: qsTr("Idle screen")
+                    onClicked: App.showIdle()
+                }
+                Item { width: parent.width - 32 * 4 - 2 * 5 - volume.width; height: 1 }
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: 32
+                    iconSize: 18
+                    icon: Player.muted || Player.volume === 0 ? "mute" : (Player.volume < 0.5 ? "volumeLow" : "volume")
+                    tip: Player.muted ? qsTr("Unmute") : qsTr("Mute")
+                    onClicked: Player.muted = !Player.muted
+                }
+                Slider {
+                    id: volume
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 96
+                    rightPadding: 0
+                    from: 0
+                    to: 1
+                    value: Player.volume
+                    onMoved: { Player.volume = value; Player.muted = false }
+                    background: Rectangle {
+                        x: volume.leftPadding
+                        y: volume.topPadding + volume.availableHeight / 2 - height / 2
+                        width: volume.availableWidth
+                        height: 3
+                        radius: 2
+                        color: Style.outline
+                        Rectangle {
+                            width: volume.visualPosition * parent.width
+                            height: parent.height
+                            radius: 2
+                            color: Player.muted ? Style.inkFaint : Style.accent
+                        }
+                    }
+                    handle: Rectangle {
+                        x: volume.leftPadding + volume.visualPosition * (volume.availableWidth - width)
+                        y: volume.topPadding + volume.availableHeight / 2 - height / 2
+                        width: 12
+                        height: 12
+                        radius: 6
+                        color: Style.accent
+                        visible: volume.hovered || volume.pressed
+                    }
                 }
             }
         }
