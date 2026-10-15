@@ -6,7 +6,25 @@
   qt6,
   makeDesktopItem,
   copyDesktopItems,
+  symlinkJoin,
+  egl-wayland,
+  egl-gbm,
+  egl-x11,
 }:
+
+let
+  # NVIDIA's EGL platforms without egl-wayland2: 1.0.2 leaks host memory on every presented frame when explicit
+  # sync is in use (~1 GB an hour for a window repainting at 200 Hz on Hyprland, measured with driver 615.71);
+  # egl-wayland 1.x keeps explicit sync and doesn't leak. Only NVIDIA's libEGL reads this; Mesa ignores it.
+  eglPlatforms = symlinkJoin {
+    name = "soundcloud-rpc-egl-platforms";
+    paths = [
+      egl-wayland
+      egl-gbm
+      egl-x11
+    ];
+  };
+in
 
 stdenv.mkDerivation {
   pname = "soundcloud-rpc";
@@ -39,6 +57,12 @@ stdenv.mkDerivation {
     qt6.qtwayland
     qt6.qtsvg
     qt6.qtshadertools # qsb: the idle themes' shaders are compiled at build time
+  ];
+
+  qtWrapperArgs = [
+    "--set-default"
+    "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS"
+    "${eglPlatforms}/share/egl/egl_external_platform.d"
   ];
 
   desktopItems = [
