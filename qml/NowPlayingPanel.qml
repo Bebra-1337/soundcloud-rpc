@@ -24,6 +24,9 @@ Rectangle {
         anchors.fill: parent
         visible: Player.hasTrack
         source: panel.coverUrl
+        // turning every frame kept the window repainting at 200 Hz even while paused
+        animated: Player.playing
+        stepMs: 100
         brightness: Style.isLight ? 0.55 : -0.55
         saturation: -0.4
     }

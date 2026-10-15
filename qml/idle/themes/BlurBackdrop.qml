@@ -14,13 +14,23 @@ Item {
     property real contrast: 0.0
     property real brightness: 0.0
     property bool animated: true
-    property int detail: 16         // pixels the cover is sampled at: more keeps its shapes under the blur
+    // 0 turns the copies every frame; otherwise in steps this many ms apart, so an always-visible backdrop (the
+    // now-playing panel) doesn't make the window repaint at the display's refresh rate around the clock
+    property int stepMs: 0
+    property real turned: 0         // ms of turning so far, for stepMs
+    property int detail: 16        // pixels the cover is sampled at: more keeps its shapes under the blur
     property int blurMax: 32
     property int copies: 2
     readonly property real shrink: 8
     readonly property real side: Math.ceil(Math.sqrt(width * width + height * height) * 1.15)
 
     Rectangle { anchors.fill: parent; color: palette.window }
+    Timer {
+        interval: bd.stepMs
+        repeat: true
+        running: bd.animated && bd.stepMs > 0 && bd.visible
+        onTriggered: bd.turned += interval
+    }
 
     Item {
         anchors.fill: parent
@@ -34,11 +44,13 @@ Item {
                 width: bd.side; height: bd.side
                 x: (bd.width - width) / 2; y: (bd.height - height) / 2
                 opacity: index === 0 ? 1 : 0.55
+                readonly property real period: index === 0 ? 150000 : 110000
+                rotation: bd.stepMs > 0 ? (index === 0 ? 1 : -1) * (bd.turned % period) / period * 360 : 0
                 RotationAnimator on rotation {
                     from: index === 0 ? 0 : 360; to: index === 0 ? 360 : 0
-                    duration: index === 0 ? 150000 : 110000
+                    duration: layerItem.period
                     loops: Animation.Infinite
-                    running: bd.animated
+                    running: bd.animated && bd.stepMs === 0
                 }
                 Item {
                     width: parent.width / bd.shrink
